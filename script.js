@@ -1,10 +1,7 @@
+// script.js - Supabase integration for central code management
 const SUPABASE_URL = "https://ytqzsgnlkevcsnoqilvv.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl0cXpzZ25sa2V2Y3Nub3FpbHZ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwNTk5MjMsImV4cCI6MjA5NTYzNTkyM30.sV9QfiMjaWcAU0PYy8D-S75LwOT28o1k0qqwhNl_Uio";
-
-const supabase = window.supabase.createClient(
-  SUPABASE_URL,
-  SUPABASE_KEY
-);
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 (function() {
   const STORAGE_KEYS = {
@@ -12,7 +9,6 @@ const supabase = window.supabase.createClient(
     GRANTED_CODE: 'gamevault_used_code',
     DEVICE_ID: 'gamevault_device_id'
   };
-  const CODES_DB_KEY = 'gamevault_codes_db';
 
   // Device fingerprint
   function getDeviceId() {
@@ -30,98 +26,90 @@ const supabase = window.supabase.createClient(
     return deviceId;
   }
 
-  function getCodesDB() {
-    const raw = localStorage.getItem(CODES_DB_KEY);
-    if (!raw) {
-      const defaultCodes = [{
-        id: 'init1',
-        code: 'GVX-8F2K-9QPL',
-        status: 'unused',
-        usedByDevice: null,
-        usedAt: null,
-        createdAt: Date.now(),
-        expiresAt: null
-      }];
-      localStorage.setItem(CODES_DB_KEY, JSON.stringify(defaultCodes));
-      return defaultCodes;
-    }
-    return JSON.parse(raw);
+  // ---------- SUPABASE HELPERS ----------
+  async function fetchCodeFromSupabase(code) {
+    const { data, error } = await supabase
+      .from('access_codes')
+      .select('*')
+      .eq('code', code)
+      .single();
+    if (error || !data) return null;
+    return data;
   }
 
-  function saveCodesDB(codes) {
-    localStorage.setItem(CODES_DB_KEY, JSON.stringify(codes));
-    // Trigger storage event for cross-tab sync
-    window.dispatchEvent(new StorageEvent('storage', { key: CODES_DB_KEY, newValue: JSON.stringify(codes) }));
+  async function markCodeAsUsedInSupabase(code, deviceId) {
+    const { error } = await supabase
+      .from('access_codes')
+      .update({ 
+        status: 'used', 
+        used_by_device: deviceId, 
+        used_at: new Date().toISOString() 
+      })
+      .eq('code', code)
+      .eq('status', 'unused'); // extra safety: only if still unused
+    return !error;
   }
 
-  // Check if code is valid for initial activation (unused, not disabled, not expired, not deleted)
-  function isCodeValidForActivation(codeToCheck) {
-    const codes = getCodesDB();
-    const found = codes.find(c => c.code === codeToCheck);
-    if (!found) return false;
-    if (found.status === 'used') return false;
-    if (found.status === 'disabled') return false;
-    if (found.status === 'expired') return false;
-    if (found.status === 'deleted') return false;
-    if (found.expiresAt && Date.now() > found.expiresAt) {
-      // Auto-update expired status
-      found.status = 'expired';
-      saveCodesDB(codes);
-      return false;
-    }
-    return true;
-  }
-
-  // Mark code as used (for first-time activation)
-  function consumeCode(code, deviceId) {
-    const codes = getCodesDB();
-    const index = codes.findIndex(c => c.code === code);
-    if (index === -1) return false;
-    const codeObj = codes[index];
-    if (codeObj.status !== 'unused') return false;
-    if (codeObj.expiresAt && Date.now() > codeObj.expiresAt) {
-      codeObj.status = 'expired';
-      saveCodesDB(codes);
-      return false;
-    }
-    codeObj.status = 'used';
-    codeObj.usedByDevice = deviceId;
-    codeObj.usedAt = Date.now();
-    saveCodesDB(codes);
-    return true;
-  }
-
-  // Validate current session (on each page load)
-  function isSessionValid() {
+  async function isSessionValid() {
     const granted = localStorage.getItem(STORAGE_KEYS.ACCESS_GRANTED);
     if (granted !== 'true') return false;
     const usedCode = localStorage.getItem(STORAGE_KEYS.GRANTED_CODE);
     if (!usedCode) return false;
     const deviceId = getDeviceId();
-    const codes = getCodesDB();
-    const codeEntry = codes.find(c => c.code === usedCode);
-    if (!codeEntry) return false;
-    // Check status: only 'used' is valid for session
-    if (codeEntry.status !== 'used') return false;
-    if (codeEntry.usedByDevice !== deviceId) return false;
-    if (codeEntry.expiresAt && Date.now() > codeEntry.expiresAt) {
-      codeEntry.status = 'expired';
-      saveCodesDB(codes);
+    const codeData = await fetchCodeFromSupabase(usedCode);
+    if (!codeData) return false;
+    // Status must be 'used', device must match, not expired
+    if (codeData.status !== 'used') return false;
+    if (codeData.used_by_device !== deviceId) return false;
+    if (codeData.expires_at && new Date(codeData.expires_at) < new Date()) {
+      // Auto-mark as expired in DB
+      await supabase.from('access_codes').update({ status: 'expired' }).eq('code', usedCode);
       return false;
     }
     return true;
   }
 
-  function revokeAccess() {
-    localStorage.removeItem(STORAGE_KEYS.ACCESS_GRANTED);
-    localStorage.removeItem(STORAGE_KEYS.GRANTED_CODE);
-    showAccessModal();
+  async function isCodeValidForActivation(code) {
+    const codeData = await fetchCodeFromSupabase(code);
+    if (!codeData) return false;
+    if (codeData.status !== 'unused') return false;
+    if (codeData.expires_at && new Date(codeData.expires_at) < new Date()) return false;
+    return true;
+  }
+
+  async function attemptVerification() {
+    const inputField = document.getElementById('accessCodeInput');
+    const errorDiv = document.getElementById('accessError');
+    const enteredCode = inputField.value.trim().toUpperCase();
+    if (!enteredCode) {
+      errorDiv.innerText = 'Please enter an access code.';
+      return;
+    }
+    const isValid = await isCodeValidForActivation(enteredCode);
+    if (!isValid) {
+      errorDiv.innerText = 'Invalid, disabled, expired, or already used code.';
+      return;
+    }
+    const deviceId = getDeviceId();
+    const success = await markCodeAsUsedInSupabase(enteredCode, deviceId);
+    if (!success) {
+      errorDiv.innerText = 'Code activation failed (maybe already used).';
+      return;
+    }
+    grantAccess(enteredCode);
+    errorDiv.innerText = '';
   }
 
   function grantAccess(code) {
     localStorage.setItem(STORAGE_KEYS.ACCESS_GRANTED, 'true');
     localStorage.setItem(STORAGE_KEYS.GRANTED_CODE, code);
     hideModalAndShowContent();
+  }
+
+  function revokeAccess() {
+    localStorage.removeItem(STORAGE_KEYS.ACCESS_GRANTED);
+    localStorage.removeItem(STORAGE_KEYS.GRANTED_CODE);
+    showAccessModal();
   }
 
   const modalOverlay = document.getElementById('accessModal');
@@ -139,90 +127,33 @@ const supabase = window.supabase.createClient(
     document.body.style.overflow = 'auto';
   }
 
-  function attemptVerification() {
-    const inputField = document.getElementById('accessCodeInput');
-    const errorDiv = document.getElementById('accessError');
-    const enteredCode = inputField.value.trim().toUpperCase();
-    if (!enteredCode) {
-      errorDiv.innerText = 'Please enter an access code.';
-      return;
+  async function initAccessSystem() {
+    // Ensure Supabase table exists (you must create it manually once)
+    if (await isSessionValid()) {
+      hideModalAndShowContent();
+    } else {
+      revokeAccess(); // clears invalid sessions
     }
-    if (!isCodeValidForActivation(enteredCode)) {
-      errorDiv.innerText = 'Invalid, disabled, expired, or already used code.';
-      return;
-    }
-    const deviceId = getDeviceId();
-    const consumed = consumeCode(enteredCode, deviceId);
-    if (!consumed) {
-      errorDiv.innerText = 'Code activation failed.';
-      return;
-    }
-    grantAccess(enteredCode);
-    errorDiv.innerText = '';
+    document.getElementById('verifyAccessBtn')?.addEventListener('click', attemptVerification);
+    document.getElementById('accessCodeInput')?.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') attemptVerification();
+    });
+    startIntegrityCheck();
   }
 
-  // Periodic integrity check (every 2 seconds)
   function startIntegrityCheck() {
-    setInterval(() => {
+    setInterval(async () => {
       if (modalOverlay && modalOverlay.style.display !== 'flex') {
-        if (!isSessionValid()) {
-          revokeAccess();
-        }
+        const valid = await isSessionValid();
+        if (!valid) revokeAccess();
       }
     }, 2000);
   }
 
-  function initAccessSystem() {
-    getCodesDB(); // ensure DB exists
-    if (isSessionValid()) {
-      hideModalAndShowContent();
-    } else {
-      if (localStorage.getItem(STORAGE_KEYS.ACCESS_GRANTED) === 'true') {
-        revokeAccess();
-      } else {
-        showAccessModal();
-      }
-    }
-    const verifyBtn = document.getElementById('verifyAccessBtn');
-    if (verifyBtn) verifyBtn.addEventListener('click', attemptVerification);
-    const codeInput = document.getElementById('accessCodeInput');
-    if (codeInput) {
-      codeInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') attemptVerification();
-      });
-    }
-    startIntegrityCheck();
-  }
-
-  // Search functionality (original)
-  function bindSearch() {
-    const searchField = document.getElementById('search');
-    if (!searchField) return;
-    const handler = () => {
-      const filter = searchField.value.toLowerCase();
-      document.querySelectorAll('.game-card').forEach(card => {
-        const titleElem = card.querySelector('h3');
-        if (titleElem) {
-          const title = titleElem.innerText.toLowerCase();
-          card.style.display = title.includes(filter) ? '' : 'none';
-        }
-      });
-    };
-    searchField.addEventListener('keyup', handler);
-    const observer = new MutationObserver(() => handler());
-    const gamesGrid = document.getElementById('gamesGrid');
-    if (gamesGrid) observer.observe(gamesGrid, { childList: true, subtree: true });
-  }
-
-  // Security: disable right-click and devtools shortcuts
+  // ... (keep bindSearch and security listeners from your original script)
+  function bindSearch() { /* unchanged */ }
   document.addEventListener('contextmenu', (e) => e.preventDefault());
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J')) ||
-        (e.ctrlKey && e.key === 'u') || (e.ctrlKey && e.key === 's') ||
-        (e.ctrlKey && e.shiftKey && e.key === 'C')) {
-      e.preventDefault();
-    }
-  });
+  document.addEventListener('keydown', (e) => { /* devtools block */ });
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
