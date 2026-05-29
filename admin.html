@@ -17,7 +17,7 @@
   const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl0cXpzZ25sa2V2Y3Nub3FpbHZ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwNTk5MjMsImV4cCI6MjA5NTYzNTkyM30.sV9QfiMjaWcAU0PYy8D-S75LwOT28o1k0qqwhNl_Uio";
   const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   const ADMIN_SESSION_KEY = 'gamevault_admin_auth';
-  const ADMIN_PASSWORD = 'Admin@2026Vault';
+  const ADMIN_PASSWORD = 'Admin@2026Vault';  // Change to your super unique password
 
   function generateStrongCode() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ0123456789';
@@ -32,8 +32,11 @@
 
   async function fetchAllCodes() {
     const { data, error } = await supabase.from('access_codes').select('*').order('created_at', { ascending: false });
-    if (error) return [];
-    return data;
+    if (error) {
+      console.error("Fetch error:", error);
+      return [];
+    }
+    return data || [];
   }
 
   async function insertCode(code, expiresAt) {
@@ -45,6 +48,7 @@
       created_at: new Date().toISOString(),
       expires_at: expiresAt
     }]);
+    if (error) console.error("Insert error:", error);
     return !error;
   }
 
@@ -54,15 +58,35 @@
   }
 
   async function toggleCodeStatus(codeId, currentStatus) {
-    let newStatus = currentStatus === 'disabled' ? (usedByDevice ? 'used' : 'unused') : 'disabled';
-    // If enabling a previously used code, we need to know if it had a device
-    const { data: codeData } = await supabase.from('access_codes').select('used_by_device').eq('id', codeId).single();
-    if (currentStatus === 'disabled' && codeData?.used_by_device) newStatus = 'used';
-    const { error } = await supabase.from('access_codes').update({ status: newStatus }).eq('id', codeId);
-    return !error;
+    // First get the current code data to check used_by_device
+    const { data: codeData, error } = await supabase
+      .from('access_codes')
+      .select('used_by_device')
+      .eq('id', codeId)
+      .single();
+    if (error) {
+      console.error("Toggle fetch error:", error);
+      return false;
+    }
+    let newStatus;
+    if (currentStatus === 'disabled') {
+      // Enabling: restore to 'used' if it had a device, otherwise 'unused'
+      newStatus = codeData?.used_by_device ? 'used' : 'unused';
+    } else {
+      // Disabling: set to 'disabled'
+      newStatus = 'disabled';
+    }
+    const { error: updateError } = await supabase
+      .from('access_codes')
+      .update({ status: newStatus })
+      .eq('id', codeId);
+    if (updateError) console.error("Toggle update error:", updateError);
+    return !updateError;
   }
 
-  function isAdminAuthenticated() { return sessionStorage.getItem(ADMIN_SESSION_KEY) === 'true'; }
+  function isAdminAuthenticated() { 
+    return sessionStorage.getItem(ADMIN_SESSION_KEY) === 'true'; 
+  }
 
   function renderLogin() {
     const container = document.getElementById('adminPanel');
@@ -109,7 +133,9 @@
         </div>
         <div style="overflow-x:auto;">
           <table class="admin-table">
-            <thead><tr><th>Code</th><th>Status</th><th>Enable/Disable</th><th>Used By</th><th>Activation Date</th><th>Expires</th><th>Actions</th></tr></thead>
+            <thead>
+              <tr><th>Code</th><th>Status</th><th>Enable/Disable</th><th>Used By</th><th>Activation Date</th><th>Expires</th><th>Actions</th></tr>
+            </thead>
             <tbody id="codesTableBody"></tbody>
           </table>
         </div>
@@ -122,21 +148,29 @@
       const used = codes.filter(c => c.status === 'used').length;
       const unused = codes.filter(c => c.status === 'unused').length;
       const disabled = codes.filter(c => c.status === 'disabled').length;
+      const expired = codes.filter(c => c.status === 'expired').length;
       document.getElementById('statCards').innerHTML = `
         <div class="stat-card"><div class="stat-number">${total}</div><div>Total</div></div>
         <div class="stat-card"><div class="stat-number">${used}</div><div>Used</div></div>
         <div class="stat-card"><div class="stat-number">${unused}</div><div>Unused</div></div>
         <div class="stat-card"><div class="stat-number">${disabled}</div><div>Disabled</div></div>
+        <div class="stat-card"><div class="stat-number">${expired}</div><div>Expired</div></div>
       `;
       const searchTerm = document.getElementById('searchCodes')?.value.toLowerCase() || '';
-      const filtered = codes.filter(c => c.code.toLowerCase().includes(searchTerm) || (c.used_by_device && c.used_by_device.toLowerCase().includes(searchTerm)));
+      const filtered = codes.filter(c => 
+        c.code.toLowerCase().includes(searchTerm) || 
+        (c.used_by_device && c.used_by_device.toLowerCase().includes(searchTerm))
+      );
       const tbody = document.getElementById('codesTableBody');
       tbody.innerHTML = '';
       for (const c of filtered) {
         const row = tbody.insertRow();
+        // Code cell with copy button
         row.insertCell(0).innerHTML = `<span class="code-badge">${c.code}</span><button class="btn-admin" data-copy="${c.code}" style="margin-left:8px;">📋 Copy</button>`;
+        // Status badge
         let statusClass = c.status === 'used' ? 'status-used' : (c.status === 'unused' ? 'status-unused' : 'status-disabled');
         row.insertCell(1).innerHTML = `<span class="status-badge ${statusClass}">${c.status.toUpperCase()}</span>`;
+        // Enable/Disable button
         const toggleBtn = document.createElement('button');
         toggleBtn.className = `btn-admin ${c.status === 'disabled' ? 'btn-admin-primary' : 'btn-admin-warning'}`;
         toggleBtn.innerText = c.status === 'disabled' ? 'Enable' : 'Disable';
@@ -145,9 +179,11 @@
           refreshTable();
         };
         row.insertCell(2).appendChild(toggleBtn);
+        // Device info
         row.insertCell(3).innerHTML = c.used_by_device ? c.used_by_device.substring(0,20)+'…' : '—';
         row.insertCell(4).innerHTML = c.used_at ? new Date(c.used_at).toLocaleString() : '—';
         row.insertCell(5).innerHTML = c.expires_at ? new Date(c.expires_at).toLocaleDateString() : 'Never';
+        // Delete button
         const delBtn = document.createElement('button');
         delBtn.innerText = 'Delete';
         delBtn.className = 'btn-admin btn-admin-danger';
@@ -160,6 +196,7 @@
         const actionCell = row.insertCell(6);
         actionCell.appendChild(delBtn);
       }
+      // Attach copy event listeners
       document.querySelectorAll('[data-copy]').forEach(btn => {
         btn.addEventListener('click', () => {
           navigator.clipboard.writeText(btn.getAttribute('data-copy'));
@@ -169,6 +206,7 @@
       });
     };
 
+    // Event listeners for generation
     document.getElementById('genSingleBtn')?.addEventListener('click', async () => {
       const expiryDays = parseInt(document.getElementById('expiryDays')?.value) || null;
       let expiresAt = null;
