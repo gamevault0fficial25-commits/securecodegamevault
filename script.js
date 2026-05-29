@@ -1,446 +1,239 @@
-```javascript
-// =========================
-// SUPABASE CONFIG
-// =========================
+// script.js - Fixed enable/disable logic, proper status handling
+const SUPABASE_URL = "https://ytqzsgnlkevcsnoqilvv.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl0cXpzZ25sa2V2Y3Nub3FpbHZ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwNTk5MjMsImV4cCI6MjA5NTYzNTkyM30.sV9QfiMjaWcAU0PYy8D-S75LwOT28o1k0qqwhNl_Uio";
 
-const SUPABASE_URL =
-  "https://ytqzsgnlkevcsnoqilvv.supabase.co";
-
-const SUPABASE_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl0cXpzZ25sa2V2Y3Nub3FpbHZ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwNTk5MjMsImV4cCI6MjA5NTYzNTkyM30.sV9QfiMjaWcAU0PYy8D-S75LwOT28o1k0qqwhNl_Uio";
-
-const supabase =
-  window.supabase.createClient(
-    SUPABASE_URL,
-    SUPABASE_KEY
-  );
+const supabase = window.supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_KEY
+);
 
 console.log("Supabase Connected");
 
-// =========================
-// ACCESS SYSTEM
-// =========================
-
-(function () {
-
+(function() {
   const STORAGE_KEYS = {
-    ACCESS_GRANTED: "gamevault_access_granted",
-    GRANTED_CODE: "gamevault_used_code",
-    DEVICE_ID: "gamevault_device_id"
+    ACCESS_GRANTED: 'gamevault_access_granted',
+    GRANTED_CODE: 'gamevault_used_code',
+    DEVICE_ID: 'gamevault_device_id'
   };
+  const CODES_DB_KEY = 'gamevault_codes_db';
 
-  const modalOverlay =
-    document.getElementById("accessModal");
-
-  const protectedContent =
-    document.getElementById("protected-content");
-
-  // =========================
-  // DEVICE ID
-  // =========================
-
+  // Device fingerprint
   function getDeviceId() {
-
-    let deviceId =
-      localStorage.getItem(
-        STORAGE_KEYS.DEVICE_ID
-      );
-
+    let deviceId = localStorage.getItem(STORAGE_KEYS.DEVICE_ID);
     if (!deviceId) {
-
-      const raw =
-        navigator.userAgent +
-        navigator.language +
-        screen.width +
-        screen.height;
-
+      const fingerprint = navigator.userAgent + navigator.language + screen.width + screen.height + new Date().getTimezoneOffset();
       let hash = 0;
-
-      for (let i = 0; i < raw.length; i++) {
-        hash =
-          ((hash << 5) - hash) +
-          raw.charCodeAt(i);
-
+      for (let i = 0; i < fingerprint.length; i++) {
+        hash = ((hash << 5) - hash) + fingerprint.charCodeAt(i);
         hash |= 0;
       }
-
-      deviceId =
-        "DEV_" +
-        Math.abs(hash).toString(36);
-
-      localStorage.setItem(
-        STORAGE_KEYS.DEVICE_ID,
-        deviceId
-      );
+      deviceId = 'DEV_' + Math.abs(hash).toString(36) + '_' + Date.now().toString(36);
+      localStorage.setItem(STORAGE_KEYS.DEVICE_ID, deviceId);
     }
-
     return deviceId;
   }
 
-  // =========================
-  // UI
-  // =========================
-
-  function showAccessModal() {
-
-    if (modalOverlay) {
-      modalOverlay.style.display = "flex";
+  function getCodesDB() {
+    const raw = localStorage.getItem(CODES_DB_KEY);
+    if (!raw) {
+      const defaultCodes = [{
+        id: 'init1',
+        code: 'GVX-8F2K-9QPL',
+        status: 'unused',
+        usedByDevice: null,
+        usedAt: null,
+        createdAt: Date.now(),
+        expiresAt: null
+      }];
+      localStorage.setItem(CODES_DB_KEY, JSON.stringify(defaultCodes));
+      return defaultCodes;
     }
-
-    if (protectedContent) {
-      protectedContent.style.visibility =
-        "hidden";
-    }
-
-    document.body.style.overflow =
-      "hidden";
+    return JSON.parse(raw);
   }
 
-  function hideModalAndShowContent() {
-
-    if (modalOverlay) {
-      modalOverlay.style.display = "none";
-    }
-
-    if (protectedContent) {
-      protectedContent.style.visibility =
-        "visible";
-    }
-
-    document.body.style.overflow =
-      "auto";
+  function saveCodesDB(codes) {
+    localStorage.setItem(CODES_DB_KEY, JSON.stringify(codes));
+    // Trigger storage event for cross-tab sync
+    window.dispatchEvent(new StorageEvent('storage', { key: CODES_DB_KEY, newValue: JSON.stringify(codes) }));
   }
 
-  // =========================
-  // FETCH CODE
-  // =========================
-
-  async function fetchCode(code) {
-
-    const { data, error } =
-      await supabase
-        .from("access_codes")
-        .select("*")
-        .eq("code", code)
-        .single();
-
-    if (error || !data) {
-      console.log(error);
-      return null;
-    }
-
-    return data;
-  }
-
-  // =========================
-  // VALIDATE SESSION
-  // =========================
-
-  async function isSessionValid() {
-
-    const granted =
-      localStorage.getItem(
-        STORAGE_KEYS.ACCESS_GRANTED
-      );
-
-    const savedCode =
-      localStorage.getItem(
-        STORAGE_KEYS.GRANTED_CODE
-      );
-
-    if (granted !== "true") {
+  // Check if code is valid for initial activation (unused, not disabled, not expired, not deleted)
+  function isCodeValidForActivation(codeToCheck) {
+    const codes = getCodesDB();
+    const found = codes.find(c => c.code === codeToCheck);
+    if (!found) return false;
+    if (found.status === 'used') return false;
+    if (found.status === 'disabled') return false;
+    if (found.status === 'expired') return false;
+    if (found.status === 'deleted') return false;
+    if (found.expiresAt && Date.now() > found.expiresAt) {
+      // Auto-update expired status
+      found.status = 'expired';
+      saveCodesDB(codes);
       return false;
     }
-
-    if (!savedCode) {
-      return false;
-    }
-
-    const deviceId =
-      getDeviceId();
-
-    const codeData =
-      await fetchCode(savedCode);
-
-    if (!codeData) {
-      return false;
-    }
-
-    // disabled
-    if (codeData.active === false) {
-      return false;
-    }
-
-    // deleted
-    if (codeData.deleted === true) {
-      return false;
-    }
-
-    // wrong device
-    if (
-      codeData.used_by_device !== deviceId
-    ) {
-      return false;
-    }
-
     return true;
   }
 
-  // =========================
-  // VERIFY ACCESS CODE
-  // =========================
-
-  async function attemptVerification() {
-
-    const input =
-      document.getElementById(
-        "accessCodeInput"
-      );
-
-    const errorDiv =
-      document.getElementById(
-        "accessError"
-      );
-
-    const enteredCode =
-      input.value
-        .trim()
-        .toUpperCase();
-
-    if (!enteredCode) {
-
-      errorDiv.innerText =
-        "Please enter a code.";
-
-      return;
+  // Mark code as used (for first-time activation)
+  function consumeCode(code, deviceId) {
+    const codes = getCodesDB();
+    const index = codes.findIndex(c => c.code === code);
+    if (index === -1) return false;
+    const codeObj = codes[index];
+    if (codeObj.status !== 'unused') return false;
+    if (codeObj.expiresAt && Date.now() > codeObj.expiresAt) {
+      codeObj.status = 'expired';
+      saveCodesDB(codes);
+      return false;
     }
-
-    const codeData =
-      await fetchCode(
-        enteredCode
-      );
-
-    // invalid
-    if (!codeData) {
-
-      errorDiv.innerText =
-        "Invalid access code.";
-
-      return;
-    }
-
-    // disabled
-    if (
-      codeData.active === false
-    ) {
-
-      errorDiv.innerText =
-        "This code is disabled.";
-
-      return;
-    }
-
-    // deleted
-    if (
-      codeData.deleted === true
-    ) {
-
-      errorDiv.innerText =
-        "This code was removed.";
-
-      return;
-    }
-
-    const deviceId =
-      getDeviceId();
-
-    // already used by another device
-    if (
-      codeData.status === "used" &&
-      codeData.used_by_device !== deviceId
-    ) {
-
-      errorDiv.innerText =
-        "Code already used.";
-
-      return;
-    }
-
-    // activate code first time
-    if (
-      codeData.status === "unused"
-    ) {
-
-      const { error } =
-        await supabase
-          .from("access_codes")
-          .update({
-            status: "used",
-            used_by_device: deviceId,
-            used_at:
-              new Date()
-                .toISOString()
-          })
-          .eq(
-            "code",
-            enteredCode
-          );
-
-      if (error) {
-
-        console.log(error);
-
-        errorDiv.innerText =
-          "Activation failed.";
-
-        return;
-      }
-    }
-
-    // save session
-    localStorage.setItem(
-      STORAGE_KEYS.ACCESS_GRANTED,
-      "true"
-    );
-
-    localStorage.setItem(
-      STORAGE_KEYS.GRANTED_CODE,
-      enteredCode
-    );
-
-    errorDiv.innerText = "";
-
-    hideModalAndShowContent();
-
-    console.log(
-      "Access Granted"
-    );
+    codeObj.status = 'used';
+    codeObj.usedByDevice = deviceId;
+    codeObj.usedAt = Date.now();
+    saveCodesDB(codes);
+    return true;
   }
 
-  // =========================
-  // REVOKE ACCESS
-  // =========================
+  // Validate current session (on each page load)
+  function isSessionValid() {
+    const granted = localStorage.getItem(STORAGE_KEYS.ACCESS_GRANTED);
+    if (granted !== 'true') return false;
+    const usedCode = localStorage.getItem(STORAGE_KEYS.GRANTED_CODE);
+    if (!usedCode) return false;
+    const deviceId = getDeviceId();
+    const codes = getCodesDB();
+    const codeEntry = codes.find(c => c.code === usedCode);
+    if (!codeEntry) return false;
+    // Check status: only 'used' is valid for session
+    if (codeEntry.status !== 'used') return false;
+    if (codeEntry.usedByDevice !== deviceId) return false;
+    if (codeEntry.expiresAt && Date.now() > codeEntry.expiresAt) {
+      codeEntry.status = 'expired';
+      saveCodesDB(codes);
+      return false;
+    }
+    return true;
+  }
 
   function revokeAccess() {
-
-    localStorage.removeItem(
-      STORAGE_KEYS.ACCESS_GRANTED
-    );
-
-    localStorage.removeItem(
-      STORAGE_KEYS.GRANTED_CODE
-    );
-
+    localStorage.removeItem(STORAGE_KEYS.ACCESS_GRANTED);
+    localStorage.removeItem(STORAGE_KEYS.GRANTED_CODE);
     showAccessModal();
   }
 
-  // =========================
-  // LIVE CHECK
-  // =========================
-
-  function startLiveCheck() {
-
-    setInterval(async () => {
-
-      if (
-        modalOverlay.style.display ===
-        "flex"
-      ) {
-        return;
-      }
-
-      const valid =
-        await isSessionValid();
-
-      if (!valid) {
-
-        revokeAccess();
-
-        console.log(
-          "Access Revoked"
-        );
-      }
-
-    }, 3000);
+  function grantAccess(code) {
+    localStorage.setItem(STORAGE_KEYS.ACCESS_GRANTED, 'true');
+    localStorage.setItem(STORAGE_KEYS.GRANTED_CODE, code);
+    hideModalAndShowContent();
   }
 
-  // =========================
-  // INIT
-  // =========================
+  const modalOverlay = document.getElementById('accessModal');
+  const protectedContent = document.getElementById('protected-content');
+  
+  function showAccessModal() {
+    if (modalOverlay) modalOverlay.style.display = 'flex';
+    if (protectedContent) protectedContent.style.opacity = '0.6';
+    document.body.style.overflow = 'hidden';
+  }
+  
+  function hideModalAndShowContent() {
+    if (modalOverlay) modalOverlay.style.display = 'none';
+    if (protectedContent) protectedContent.style.opacity = '1';
+    document.body.style.overflow = 'auto';
+  }
 
-  async function init() {
-
-    console.log(
-      "Initializing Access System"
-    );
-
-    const valid =
-      await isSessionValid();
-
-    if (valid) {
-
-      hideModalAndShowContent();
-
-    } else {
-
-      revokeAccess();
+  function attemptVerification() {
+    const inputField = document.getElementById('accessCodeInput');
+    const errorDiv = document.getElementById('accessError');
+    const enteredCode = inputField.value.trim().toUpperCase();
+    if (!enteredCode) {
+      errorDiv.innerText = 'Please enter an access code.';
+      return;
     }
+    if (!isCodeValidForActivation(enteredCode)) {
+      errorDiv.innerText = 'Invalid, disabled, expired, or already used code.';
+      return;
+    }
+    const deviceId = getDeviceId();
+    const consumed = consumeCode(enteredCode, deviceId);
+    if (!consumed) {
+      errorDiv.innerText = 'Code activation failed.';
+      return;
+    }
+    grantAccess(enteredCode);
+    errorDiv.innerText = '';
+  }
 
-    document
-      .getElementById(
-        "verifyAccessBtn"
-      )
-      ?.addEventListener(
-        "click",
-        attemptVerification
-      );
-
-    document
-      .getElementById(
-        "accessCodeInput"
-      )
-      ?.addEventListener(
-        "keypress",
-        (e) => {
-
-          if (
-            e.key === "Enter"
-          ) {
-            attemptVerification();
-          }
+  // Periodic integrity check (every 2 seconds)
+  function startIntegrityCheck() {
+    setInterval(() => {
+      if (modalOverlay && modalOverlay.style.display !== 'flex') {
+        if (!isSessionValid()) {
+          revokeAccess();
         }
-      );
-
-    startLiveCheck();
+      }
+    }, 2000);
   }
 
-  // =========================
-  // BASIC SECURITY
-  // =========================
+  function initAccessSystem() {
+    getCodesDB(); // ensure DB exists
+    if (isSessionValid()) {
+      hideModalAndShowContent();
+    } else {
+      if (localStorage.getItem(STORAGE_KEYS.ACCESS_GRANTED) === 'true') {
+        revokeAccess();
+      } else {
+        showAccessModal();
+      }
+    }
+    const verifyBtn = document.getElementById('verifyAccessBtn');
+    if (verifyBtn) verifyBtn.addEventListener('click', attemptVerification);
+    const codeInput = document.getElementById('accessCodeInput');
+    if (codeInput) {
+      codeInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') attemptVerification();
+      });
+    }
+    startIntegrityCheck();
+  }
 
-  document.addEventListener(
-    "contextmenu",
-    (e) => e.preventDefault()
-  );
+  // Search functionality (original)
+  function bindSearch() {
+    const searchField = document.getElementById('search');
+    if (!searchField) return;
+    const handler = () => {
+      const filter = searchField.value.toLowerCase();
+      document.querySelectorAll('.game-card').forEach(card => {
+        const titleElem = card.querySelector('h3');
+        if (titleElem) {
+          const title = titleElem.innerText.toLowerCase();
+          card.style.display = title.includes(filter) ? '' : 'none';
+        }
+      });
+    };
+    searchField.addEventListener('keyup', handler);
+    const observer = new MutationObserver(() => handler());
+    const gamesGrid = document.getElementById('gamesGrid');
+    if (gamesGrid) observer.observe(gamesGrid, { childList: true, subtree: true });
+  }
 
-  // =========================
-  // START
-  // =========================
+  // Security: disable right-click and devtools shortcuts
+  document.addEventListener('contextmenu', (e) => e.preventDefault());
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J')) ||
+        (e.ctrlKey && e.key === 'u') || (e.ctrlKey && e.key === 's') ||
+        (e.ctrlKey && e.shiftKey && e.key === 'C')) {
+      e.preventDefault();
+    }
+  });
 
-  if (
-    document.readyState ===
-    "loading"
-  ) {
-
-    document.addEventListener(
-      "DOMContentLoaded",
-      init
-    );
-
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      initAccessSystem();
+      bindSearch();
+    });
   } else {
-
-    init();
+    initAccessSystem();
+    bindSearch();
   }
-
 })();
-```
