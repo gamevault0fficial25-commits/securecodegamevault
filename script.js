@@ -115,17 +115,31 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   const modalOverlay = document.getElementById('accessModal');
   const protectedContent = document.getElementById('protected-content');
   
-  function showAccessModal() {
-    if (modalOverlay) modalOverlay.style.display = 'flex';
-    if (protectedContent) protectedContent.style.opacity = '0.6';
-    document.body.style.overflow = 'hidden';
+function showAccessModal() {
+
+  if (modalOverlay) {
+    modalOverlay.style.display = 'flex';
   }
-  
-  function hideModalAndShowContent() {
-    if (modalOverlay) modalOverlay.style.display = 'none';
-    if (protectedContent) protectedContent.style.opacity = '1';
-    document.body.style.overflow = 'auto';
+
+  if (protectedContent) {
+    protectedContent.style.visibility = 'hidden';
   }
+
+  document.body.style.overflow = 'hidden';
+}
+
+function hideModalAndShowContent() {
+
+  if (modalOverlay) {
+    modalOverlay.style.display = 'none';
+  }
+
+  if (protectedContent) {
+    protectedContent.style.visibility = 'visible';
+  }
+
+  document.body.style.overflow = 'auto';
+}
 
   async function initAccessSystem() {
     // Ensure Supabase table exists (you must create it manually once)
