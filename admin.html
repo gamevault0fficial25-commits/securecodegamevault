@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Portal - Code Management</title>
   <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 <div id="adminApp" class="admin-login-container">
@@ -12,277 +13,240 @@
 </div>
 
 <script>
-  (function() {
-    const ADMIN_SESSION_KEY = 'gamevault_admin_auth';
-    const ADMIN_PASSWORD = 'Gv#8kL9$mQ2!xR7@pW4'; 
-    const CODES_DB_KEY = 'gamevault_codes_db';
+  const SUPABASE_URL = "https://ytqzsgnlkevcsnoqilvv.supabase.co";
+  const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl0cXpzZ25sa2V2Y3Nub3FpbHZ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwNTk5MjMsImV4cCI6MjA5NTYzNTkyM30.sV9QfiMjaWcAU0PYy8D-S75LwOT28o1k0qqwhNl_Uio";
+  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  const ADMIN_SESSION_KEY = 'gamevault_admin_auth';
+  const ADMIN_PASSWORD = 'Gv#8kL9$mQ2!xR7@pW4';  // Your super unique password
 
-    function getCodesDB() {
-      const raw = localStorage.getItem(CODES_DB_KEY);
-      if (!raw) {
-        const defaultCodes = [{
-          id: 'init1',
-          code: 'GVX-8F2K-9QPL',
-          status: 'unused',
-          usedByDevice: null,
-          usedAt: null,
-          createdAt: Date.now(),
-          expiresAt: null
-        }];
-        localStorage.setItem(CODES_DB_KEY, JSON.stringify(defaultCodes));
-        return defaultCodes;
-      }
-      return JSON.parse(raw);
+  function generateStrongCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ0123456789';
+    const segments = [];
+    for (let i = 0; i < 3; i++) {
+      let seg = '';
+      for (let j = 0; j < 4; j++) seg += chars.charAt(Math.floor(Math.random() * chars.length));
+      segments.push(seg);
     }
+    return segments.join('-');
+  }
 
-    function saveCodesDB(codes) {
-      localStorage.setItem(CODES_DB_KEY, JSON.stringify(codes));
-      window.dispatchEvent(new StorageEvent('storage', { key: CODES_DB_KEY, newValue: JSON.stringify(codes) }));
+  async function fetchAllCodes() {
+    const { data, error } = await supabase
+      .from('access_codes')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) {
+      console.error("Fetch error:", error);
+      return [];
     }
+    return data || [];
+  }
 
-    function generateStrongCode() {
-      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ0123456789';
-      const segments = [];
-      for (let i = 0; i < 3; i++) {
-        let seg = '';
-        for (let j = 0; j < 4; j++) seg += chars.charAt(Math.floor(Math.random() * chars.length));
-        segments.push(seg);
-      }
-      return segments.join('-');
+  async function insertCode(code, expiresAt) {
+    const { error } = await supabase.from('access_codes').insert([{
+      code: code,
+      status: 'unused',
+      used_by_device: null,
+      used_at: null,
+      created_at: new Date().toISOString(),
+      expires_at: expiresAt
+    }]);
+    if (error) console.error("Insert error:", error);
+    return !error;
+  }
+
+  async function deleteCode(codeId) {
+    const { error } = await supabase.from('access_codes').delete().eq('id', codeId);
+    return !error;
+  }
+
+  async function toggleCodeStatus(codeId, currentStatus) {
+    // First get the current code data to check used_by_device
+    const { data: codeData, error } = await supabase
+      .from('access_codes')
+      .select('used_by_device')
+      .eq('id', codeId)
+      .single();
+    if (error) {
+      console.error("Toggle fetch error:", error);
+      return false;
     }
-
-    function isAdminAuthenticated() { return sessionStorage.getItem(ADMIN_SESSION_KEY) === 'true'; }
-
-    function renderLogin() {
-      const container = document.getElementById('adminPanel');
-      container.innerHTML = `
-        <div style="text-align:center;">
-          <h2 style="margin-bottom:20px;"> Admin Access</h2>
-          <input type="password" id="adminPass" class="access-input" style="max-width:280px;" placeholder="Administrator password">
-          <button id="adminLoginBtn" class="verify-btn" style="margin-top:16px;">Authenticate</button>
-          <div id="loginError" class="access-error" style="margin-top:12px;"></div>
-        </div>
-      `;
-      document.getElementById('adminLoginBtn')?.addEventListener('click', () => {
-        const pass = document.getElementById('adminPass').value;
-        if (pass === ADMIN_PASSWORD) {
-          sessionStorage.setItem(ADMIN_SESSION_KEY, 'true');
-          renderDashboard();
-        } else {
-          document.getElementById('loginError').innerText = 'Invalid admin password.';
-        }
-      });
+    let newStatus;
+    if (currentStatus === 'disabled') {
+      // Enabling: restore to 'used' if it had a device, otherwise 'unused'
+      newStatus = codeData?.used_by_device ? 'used' : 'unused';
+    } else {
+      // Disabling: set to 'disabled'
+      newStatus = 'disabled';
     }
+    const { error: updateError } = await supabase
+      .from('access_codes')
+      .update({ status: newStatus })
+      .eq('id', codeId);
+    if (updateError) console.error("Toggle update error:", updateError);
+    return !updateError;
+  }
 
-    // Toggle enable/disable: preserve used/unused status
-    function toggleCodeStatus(codeId, currentStatus) {
-      const codes = getCodesDB();
-      const idx = codes.findIndex(c => c.id === codeId);
-      if (idx === -1) return;
-      const code = codes[idx];
-      if (currentStatus === 'disabled') {
-        // Enabling: restore original status (used or unused)
-        if (code.usedByDevice && code.usedAt) {
-          code.status = 'used';
-        } else {
-          code.status = 'unused';
-        }
+  function isAdminAuthenticated() { 
+    return sessionStorage.getItem(ADMIN_SESSION_KEY) === 'true'; 
+  }
+
+  function renderLogin() {
+    const container = document.getElementById('adminPanel');
+    container.innerHTML = `
+      <div style="text-align:center;">
+        <h2>🔐 Admin Access</h2>
+        <input type="password" id="adminPass" class="access-input" style="max-width:280px;" placeholder="Administrator password">
+        <button id="adminLoginBtn" class="verify-btn" style="margin-top:16px;">Authenticate</button>
+        <div id="loginError" class="access-error"></div>
+      </div>
+    `;
+    document.getElementById('adminLoginBtn')?.addEventListener('click', () => {
+      const pass = document.getElementById('adminPass').value;
+      if (pass === ADMIN_PASSWORD) {
+        sessionStorage.setItem(ADMIN_SESSION_KEY, 'true');
+        renderDashboard();
       } else {
-        // Disabling: set to disabled, keep usedByDevice/usedAt intact
-        code.status = 'disabled';
+        document.getElementById('loginError').innerText = 'Invalid admin password.';
       }
-      saveCodesDB(codes);
-    }
+    });
+  }
 
-    function renderDashboard() {
-      const container = document.getElementById('adminPanel');
-      container.innerHTML = `
-        <div>
-          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; margin-bottom:24px;">
-            <h2> Code Vault Admin</h2>
-            <button id="logoutAdminBtn" class="btn-admin" style="background:#3a3f4e;">Logout</button>
-          </div>
-          <div class="stat-cards" id="statCards"></div>
-          <div class="generate-panel">
-            <h3>Generate Codes</h3>
-            <div style="display:flex; gap:12px; flex-wrap:wrap; margin:16px 0;">
-              <input type="number" id="expiryDays" placeholder="Expiration (days)" style="background:#0a0d14; border:1px solid #2a2f3c; padding:8px 12px; border-radius:30px; color:white; width:160px;">
-              <input type="number" id="bulkCount" placeholder="Quantity (1-20)" value="1" min="1" max="20" style="background:#0a0d14; border:1px solid #2a2f3c; padding:8px 12px; border-radius:30px; color:white; width:120px;">
-              <button id="genSingleBtn" class="btn-admin btn-admin-primary">+ Generate Single</button>
-              <button id="genBulkBtn" class="btn-admin btn-admin-primary"> Generate Bulk</button>
-            </div>
-            <div id="genMsg" style="font-size:13px; color:#b9c3e0;"></div>
-          </div>
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:12px;">
-            <h3> Code Registry</h3>
-            <input type="text" id="searchCodes" class="search-input" placeholder="Search by code or device...">
-          </div>
-          <div style="overflow-x:auto;">
-            <table class="admin-table">
-              <thead><tr><th>Code</th><th>Status</th><th>Enable/Disable</th><th>Used By (Device)</th><th>Activation Date</th><th>Expires</th><th>Actions</th></tr>
-              </thead>
-              <tbody id="codesTableBody"></tbody>
-            </table>
-          </div>
+  async function renderDashboard() {
+    const container = document.getElementById('adminPanel');
+    container.innerHTML = `
+      <div>
+        <div style="display:flex; justify-content:space-between; margin-bottom:24px;">
+          <h2>🎮 Code Vault Admin</h2>
+          <button id="logoutAdminBtn" class="btn-admin">Logout</button>
         </div>
+        <div class="stat-cards" id="statCards"></div>
+        <div class="generate-panel">
+          <h3>Generate Codes</h3>
+          <div style="display:flex; gap:12px; flex-wrap:wrap;">
+            <input type="number" id="expiryDays" placeholder="Expiration (days)" style="background:#0a0d14; border:1px solid #2a2f3c; padding:8px 12px; border-radius:30px; color:white;">
+            <input type="number" id="bulkCount" placeholder="Quantity (1-20)" value="1" min="1" max="20" style="background:#0a0d14; border:1px solid #2a2f3c; padding:8px 12px; border-radius:30px; color:white;">
+            <button id="genSingleBtn" class="btn-admin btn-admin-primary">+ Generate Single</button>
+            <button id="genBulkBtn" class="btn-admin btn-admin-primary">⚡ Generate Bulk</button>
+          </div>
+          <div id="genMsg" style="margin-top:12px;"></div>
+        </div>
+        <div style="margin:20px 0;">
+          <input type="text" id="searchCodes" class="search-input" placeholder="Search by code or device...">
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="admin-table">
+            <thead>
+              <tr><th>Code</th><th>Status</th><th>Enable/Disable</th><th>Used By</th><th>Activation Date</th><th>Expires</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="codesTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    `;
+
+    const refreshTable = async () => {
+      const codes = await fetchAllCodes();
+      const total = codes.length;
+      const used = codes.filter(c => c.status === 'used').length;
+      const unused = codes.filter(c => c.status === 'unused').length;
+      const disabled = codes.filter(c => c.status === 'disabled').length;
+      const expired = codes.filter(c => c.status === 'expired').length;
+      document.getElementById('statCards').innerHTML = `
+        <div class="stat-card"><div class="stat-number">${total}</div><div>Total</div></div>
+        <div class="stat-card"><div class="stat-number">${used}</div><div>Used</div></div>
+        <div class="stat-card"><div class="stat-number">${unused}</div><div>Unused</div></div>
+        <div class="stat-card"><div class="stat-number">${disabled}</div><div>Disabled</div></div>
+        <div class="stat-card"><div class="stat-number">${expired}</div><div>Expired</div></div>
       `;
-
-      function refreshStatsAndTable() {
-        const freshCodes = getCodesDB();
-        const total = freshCodes.length;
-        const used = freshCodes.filter(c => c.status === 'used').length;
-        const unused = freshCodes.filter(c => c.status === 'unused').length;
-        const disabled = freshCodes.filter(c => c.status === 'disabled').length;
-        const expired = freshCodes.filter(c => c.status === 'expired').length;
-        const deleted = freshCodes.filter(c => c.status === 'deleted').length;
-        document.getElementById('statCards').innerHTML = `
-          <div class="stat-card"><div class="stat-number">${total}</div><div>Total Codes</div></div>
-          <div class="stat-card"><div class="stat-number">${used}</div><div>Used</div></div>
-          <div class="stat-card"><div class="stat-number">${unused}</div><div>Unused</div></div>
-          <div class="stat-card"><div class="stat-number">${disabled}</div><div>Disabled</div></div>
-          <div class="stat-card"><div class="stat-number">${expired}</div><div>Expired</div></div>
-        `;
-        const searchTerm = document.getElementById('searchCodes')?.value.toLowerCase() || '';
-        const filtered = freshCodes.filter(c => 
-          c.code.toLowerCase().includes(searchTerm) || 
-          (c.usedByDevice && c.usedByDevice.toLowerCase().includes(searchTerm))
-        );
-        const tbody = document.getElementById('codesTableBody');
-        tbody.innerHTML = '';
-        filtered.forEach(c => {
-          const row = tbody.insertRow();
-          // Code column with copy button
-          row.insertCell(0).innerHTML = `<span class="code-badge">${c.code}</span><button class="btn-admin" style="margin-left:8px; padding:2px 8px;" data-copy="${c.code}">📋 Copy</button>`;
-          
-          // Status badge
-          let statusText = c.status.toUpperCase();
-          let statusClass = '';
-          if (c.status === 'used') statusClass = 'status-used';
-          else if (c.status === 'unused') statusClass = 'status-unused';
-          else if (c.status === 'disabled') statusClass = 'status-disabled';
-          else if (c.status === 'expired') statusClass = 'status-disabled';
-          else statusClass = 'status-disabled';
-          row.insertCell(1).innerHTML = `<span class="status-badge ${statusClass}">${statusText}</span>`;
-          
-          // Enable/Disable button
-          const toggleBtn = document.createElement('button');
-          toggleBtn.className = `btn-admin ${c.status === 'disabled' ? 'btn-admin-primary' : 'btn-admin-warning'}`;
-          toggleBtn.innerText = c.status === 'disabled' ? 'Enable' : 'Disable';
-          toggleBtn.onclick = () => {
-            toggleCodeStatus(c.id, c.status);
-            refreshStatsAndTable();
-          };
-          const toggleCell = row.insertCell(2);
-          toggleCell.appendChild(toggleBtn);
-          
-          // Device info
-          row.insertCell(3).innerHTML = c.usedByDevice ? `<span style="font-family:monospace; font-size:12px;">${c.usedByDevice.substring(0,20)}...</span>` : '—';
-          row.insertCell(4).innerHTML = c.usedAt ? new Date(c.usedAt).toLocaleString() : '—';
-          row.insertCell(5).innerHTML = c.expiresAt ? new Date(c.expiresAt).toLocaleDateString() : 'Never';
-          
-          // Delete button
-          const actions = document.createElement('td');
-          actions.className = 'flex-actions';
-          const delBtn = document.createElement('button');
-          delBtn.innerText = 'Delete';
-          delBtn.className = 'btn-admin btn-admin-danger';
-          delBtn.onclick = () => {
-            if (confirm(`Delete code ${c.code}? This will revoke access from any user who used it.`)) {
-              const newCodes = getCodesDB().filter(cc => cc.id !== c.id);
-              saveCodesDB(newCodes);
-              refreshStatsAndTable();
-            }
-          };
-          actions.appendChild(delBtn);
-          row.appendChild(actions);
-        });
-        
-        // Attach copy event listeners
-        document.querySelectorAll('[data-copy]').forEach(btn => {
-          btn.addEventListener('click', (e) => {
-            const code = btn.getAttribute('data-copy');
-            navigator.clipboard.writeText(code);
-            const msg = document.getElementById('genMsg');
-            msg.innerText = ` Code ${code} copied!`;
-            setTimeout(() => { if(msg) msg.innerText = ''; }, 2000);
-          });
-        });
-      }
-
-      // Generate single code
-      document.getElementById('genSingleBtn')?.addEventListener('click', () => {
-        const expiryDays = parseInt(document.getElementById('expiryDays')?.value) || null;
-        let expiresAt = null;
-        if (expiryDays && expiryDays > 0) expiresAt = Date.now() + (expiryDays * 86400000);
-        let newCode = generateStrongCode();
-        let codesDB = getCodesDB();
-        let attempts = 0;
-        while (codesDB.some(c => c.code === newCode) && attempts < 10) {
-          newCode = generateStrongCode();
-          attempts++;
-        }
-        codesDB.push({
-          id: crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random(),
-          code: newCode,
-          status: 'unused',
-          usedByDevice: null,
-          usedAt: null,
-          createdAt: Date.now(),
-          expiresAt: expiresAt
-        });
-        saveCodesDB(codesDB);
-        document.getElementById('genMsg').innerHTML = `✔ Code ${newCode} generated.`;
-        refreshStatsAndTable();
-        setTimeout(() => { if(document.getElementById('genMsg')) document.getElementById('genMsg').innerHTML = ''; }, 3000);
-      });
-
-      // Generate bulk codes
-      document.getElementById('genBulkBtn')?.addEventListener('click', () => {
-        const expiryDays = parseInt(document.getElementById('expiryDays')?.value) || null;
-        let expiresAt = null;
-        if (expiryDays && expiryDays > 0) expiresAt = Date.now() + (expiryDays * 86400000);
-        let bulkCount = parseInt(document.getElementById('bulkCount')?.value) || 1;
-        if (bulkCount > 20) bulkCount = 20;
-        let generated = 0;
-        let codesDB = getCodesDB();
-        for (let i = 0; i < bulkCount; i++) {
-          let newCode = generateStrongCode();
-          let attempts = 0;
-          while (codesDB.some(c => c.code === newCode) && attempts < 10) {
-            newCode = generateStrongCode();
-            attempts++;
+      const searchTerm = document.getElementById('searchCodes')?.value.toLowerCase() || '';
+      const filtered = codes.filter(c => 
+        c.code.toLowerCase().includes(searchTerm) || 
+        (c.used_by_device && c.used_by_device.toLowerCase().includes(searchTerm))
+      );
+      const tbody = document.getElementById('codesTableBody');
+      tbody.innerHTML = '';
+      for (const c of filtered) {
+        const row = tbody.insertRow();
+        // Code cell with copy button
+        row.insertCell(0).innerHTML = `<span class="code-badge">${c.code}</span><button class="btn-admin" data-copy="${c.code}" style="margin-left:8px;">📋 Copy</button>`;
+        // Status badge
+        let statusClass = c.status === 'used' ? 'status-used' : (c.status === 'unused' ? 'status-unused' : 'status-disabled');
+        row.insertCell(1).innerHTML = `<span class="status-badge ${statusClass}">${c.status.toUpperCase()}</span>`;
+        // Enable/Disable button
+        const toggleBtn = document.createElement('button');
+        toggleBtn.className = `btn-admin ${c.status === 'disabled' ? 'btn-admin-primary' : 'btn-admin-warning'}`;
+        toggleBtn.innerText = c.status === 'disabled' ? 'Enable' : 'Disable';
+        toggleBtn.onclick = async () => {
+          await toggleCodeStatus(c.id, c.status);
+          refreshTable();
+        };
+        row.insertCell(2).appendChild(toggleBtn);
+        // Device info
+        row.insertCell(3).innerHTML = c.used_by_device ? c.used_by_device.substring(0,20)+'…' : '—';
+        row.insertCell(4).innerHTML = c.used_at ? new Date(c.used_at).toLocaleString() : '—';
+        row.insertCell(5).innerHTML = c.expires_at ? new Date(c.expires_at).toLocaleDateString() : 'Never';
+        // Delete button
+        const delBtn = document.createElement('button');
+        delBtn.innerText = 'Delete';
+        delBtn.className = 'btn-admin btn-admin-danger';
+        delBtn.onclick = async () => {
+          if (confirm(`Delete ${c.code}? Users will lose access.`)) {
+            await deleteCode(c.id);
+            refreshTable();
           }
-          codesDB.push({
-            id: crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random() + i,
-            code: newCode,
-            status: 'unused',
-            usedByDevice: null,
-            usedAt: null,
-            createdAt: Date.now(),
-            expiresAt: expiresAt
-          });
-          generated++;
-        }
-        saveCodesDB(codesDB);
-        document.getElementById('genMsg').innerHTML = `${generated} new codes generated.`;
-        refreshStatsAndTable();
-        setTimeout(() => { if(document.getElementById('genMsg')) document.getElementById('genMsg').innerHTML = ''; }, 3000);
+        };
+        const actionCell = row.insertCell(6);
+        actionCell.appendChild(delBtn);
+      }
+      // Attach copy event listeners
+      document.querySelectorAll('[data-copy]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          navigator.clipboard.writeText(btn.getAttribute('data-copy'));
+          document.getElementById('genMsg').innerText = 'Copied!';
+          setTimeout(() => document.getElementById('genMsg').innerText = '', 1500);
+        });
       });
+    };
 
-      document.getElementById('searchCodes')?.addEventListener('keyup', () => refreshStatsAndTable());
-      document.getElementById('logoutAdminBtn')?.addEventListener('click', () => {
-        sessionStorage.removeItem(ADMIN_SESSION_KEY);
-        renderLogin();
-      });
-      refreshStatsAndTable();
-    }
+    // Event listeners for generation
+    document.getElementById('genSingleBtn')?.addEventListener('click', async () => {
+      const expiryDays = parseInt(document.getElementById('expiryDays')?.value) || null;
+      let expiresAt = null;
+      if (expiryDays) expiresAt = new Date(Date.now() + expiryDays*86400000).toISOString();
+      const newCode = generateStrongCode();
+      const ok = await insertCode(newCode, expiresAt);
+      document.getElementById('genMsg').innerText = ok ? `✔ ${newCode} generated` : 'Error generating code';
+      refreshTable();
+    });
+    document.getElementById('genBulkBtn')?.addEventListener('click', async () => {
+      let count = parseInt(document.getElementById('bulkCount')?.value) || 1;
+      if (count > 20) count = 20;
+      const expiryDays = parseInt(document.getElementById('expiryDays')?.value) || null;
+      let expiresAt = null;
+      if (expiryDays) expiresAt = new Date(Date.now() + expiryDays*86400000).toISOString();
+      let success = 0;
+      for (let i = 0; i < count; i++) {
+        let newCode = generateStrongCode();
+        let ok = await insertCode(newCode, expiresAt);
+        if (ok) success++;
+      }
+      document.getElementById('genMsg').innerText = `✅ ${success} codes generated`;
+      refreshTable();
+    });
+    document.getElementById('searchCodes')?.addEventListener('keyup', () => refreshTable());
+    document.getElementById('logoutAdminBtn')?.addEventListener('click', () => {
+      sessionStorage.removeItem(ADMIN_SESSION_KEY);
+      renderLogin();
+    });
+    await refreshTable();
+  }
 
-    function initAdmin() {
-      if (isAdminAuthenticated()) renderDashboard();
-      else renderLogin();
-    }
-    initAdmin();
-  })();
+  function initAdmin() {
+    if (isAdminAuthenticated()) renderDashboard();
+    else renderLogin();
+  }
+  initAdmin();
 </script>
 </body>
 </html>
