@@ -1,4 +1,4 @@
-// script.js - Supabase integration + automatic revocation on disable/delete
+// script.js - Supabase integration for central code management
 const SUPABASE_URL = "https://ytqzsgnlkevcsnoqilvv.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl0cXpzZ25sa2V2Y3Nub3FpbHZ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwNTk5MjMsImV4cCI6MjA5NTYzNTkyM30.sV9QfiMjaWcAU0PYy8D-S75LwOT28o1k0qqwhNl_Uio";
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -46,7 +46,7 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
         used_at: new Date().toISOString() 
       })
       .eq('code', code)
-      .eq('status', 'unused');
+      .eq('status', 'unused'); // extra safety: only if still unused
     return !error;
   }
 
@@ -63,6 +63,7 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     if (codeData.status !== 'used') return false;
     if (codeData.used_by_device !== deviceId) return false;
     if (codeData.expires_at && new Date(codeData.expires_at) < new Date()) {
+      // Auto-mark as expired in DB
       await supabase.from('access_codes').update({ status: 'expired' }).eq('code', usedCode);
       return false;
     }
@@ -127,17 +128,14 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     document.body.style.overflow = 'auto';
   }
 
-  // Periodic integrity check (every 2 seconds) – this is what forces the modal when admin disables a code
+  // Periodic integrity check (every 2 seconds) – ensures admin changes revoke access instantly
   let integrityInterval;
   function startIntegrityCheck() {
     if (integrityInterval) clearInterval(integrityInterval);
     integrityInterval = setInterval(async () => {
-      // Only check if modal is hidden (user currently has access)
       if (modalOverlay && modalOverlay.style.display !== 'flex') {
         const valid = await isSessionValid();
-        if (!valid) {
-          revokeAccess();  // This will show the modal again
-        }
+        if (!valid) revokeAccess();
       }
     }, 2000);
   }
