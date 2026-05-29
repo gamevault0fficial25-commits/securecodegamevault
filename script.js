@@ -1,4 +1,11 @@
-// script.js - Fixed enable/disable logic, proper status handling
+const SUPABASE_URL = "YOUR_SUPABASE_URL";
+const SUPABASE_KEY = "YOUR_SUPABASE_KEY";
+
+const supabase = window.supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_KEY
+);
+
 (function() {
   const STORAGE_KEYS = {
     ACCESS_GRANTED: 'gamevault_access_granted',
