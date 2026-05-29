@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Portal - Code Management</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="adminApp" class="admin-login-container">
+  <div class="admin-card" id="adminPanel"></div>
+</div>
+
+<script>
+  (function() {
+    let adminAuthenticated = false;
+    
+    // Helper: authenticated fetch (handles 401)
+    async function adminFetch(endpoint, options = {}) {
+      const response = await fetch(endpoint, {
+        ...options,
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', ...options.headers }
+      });
+      if (response.status === 401) {
+        adminAuthenticated = false;
+        renderLogin();
+        throw new Error('Unauthorized');
+      }
+      return response;
+    }
+    
+    // Check admin session via cookie
+    async function checkAdminAuth() {
+      try {
+        const res = await adminFetch('/api/admin/check');
+        const data = await res.json();
+        if (data.authenticated) {
+          adminAuthenticated = true;
+          renderDashboard();
+        } else {
+          renderLogin();
+        }
+      } catch (err) {
+        renderLogin();
+      }
+    }
+    
+    // Admin login
+    async function adminLogin(password) {
+      try {
+        const res = await fetch('/api/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ password })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          adminAuthenticated = true;
+          renderDashboard();
+        } else {
+          throw new Error(data.error || 'Login failed');
+        }
+      } catch (err) {
+        const errorDiv = document.getElementById('loginError');
+        if (errorDiv) errorDiv.innerText = err.message;
+      }
+    }
+    
+    // Admin logout
+    async function adminLogout() {
+      await fetch('/api/admin/logout', { method: 'POST', credentials: 'include' });
+      adminAuthenticated = false;
+      renderLogin();
+    }
+    
+    // Toggle code status (enable/disable)
+    async function toggleCodeStatus(codeId, currentStatus) {
+      try {
+        await adminFetch(`/api/admin/codes/${codeId}/toggle`, { method: 'PUT' });
+        refreshDashboard();
+      } catch (err) {
+        alert('Failed to toggle status');
+      }
+    }
+    
+    // Delete code
+    async function deleteCode(codeId, codeValue) {
+      if (!confirm(`Delete code ${codeValue}? This will revoke access.`)) return;
+      try {
+        await adminFetch(`/api/admin/codes/${codeId}`, { method: 'DELETE' });
+        refreshDashboard();
+      } catch (err) {
+        alert('Delete failed');
+      }
+    }
+    
+    // Generate codes (single or bulk)
+    async function generateCodes(isBulk = false) {
+      const expiryDays = parseInt(document.getElementById('expiryDays')?.value) || null;
+      let count = 1;
+      if (isBulk) {
+        count = parseInt(document.getElementById('bulkCount')?.value) || 1;
+        if (count > 50) count = 50;
+        if (count < 1) count = 1;
+      }
+      try {
+        const res = await adminFetch('/api/admin/codes/generate', {
+          method: 'POST',
+          body: JSON.stringify({ count, expiryDays })
+        });
+        const data = await res.json();
+        const msgDiv = document.getElementById('genMsg');
+        msgDiv.innerHTML = `✅ Generated ${data.count} code(s)`;
+        setTimeout(() => { if (msgDiv) msgDiv.innerHTML = ''; }, 3000);
+        refreshDashboard();
+      } catch (err) {
+        document.getElementById('genMsg').innerHTML = '❌ Generation failed';
+      }
+    }
+    
+    // Load stats and codes from server
+    async function loadStatsAndCodes(searchTerm = '') {
+      const statsRes = await adminFetch('/api/admin/stats');
+      const stats = await statsRes.json();
+      const codesRes = await adminFetch(`/api/admin/codes?search=${encodeURIComponent(searchTerm)}`);
+      const codes = await codesRes.json();
+      return { stats, codes };
+    }
+    
+    // Refresh dashboard UI (stats + table)
+    async function refreshDashboard() {
+      const searchTerm = document.getElementById('searchCodes')?.value || '';
+      const { stats, codes } = await loadStatsAndCodes(searchTerm);
+      
+      // Update stat cards
+      const statCards = document.getElementById('statCards');
+      statCards.innerHTML = `
+        <div class="stat-card"><div class="stat-number">${stats.total || 0}</div><div>Total Codes</div></div>
+        <div class="stat-card"><div class="stat-number">${stats.used || 0}</div><div>Used</div></div>
+        <div class="stat-card"><div class="stat-number">${stats.unused || 0}</div><div>Unused</div></div>
+        <div class="stat-card"><div class="stat-number">${stats.disabled || 0}</div><div>Disabled</div></div>
+        <div class="stat-card"><div class="stat-number">${stats.expired || 0}</div><div>Expired</div></div>
+      `;
+      
+      // Populate table
+      const tbody = document.getElementById('codesTableBody');
+      tbody.innerHTML = '';
+      for (const code of codes) {
+        const row = tbody.insertRow();
+        
+        // Code column with copy button
+        row.insertCell(0).innerHTML = `<span class="code-badge">${escapeHtml(code.code)}</span><button class="btn-admin" style="margin-left:8px; padding:2px 8px;" data-copy="${escapeHtml(code.code)}">📋 Copy</button>`;
+        
+        // Status badge
+        let statusClass = '';
+        if (code.status === 'used') statusClass = 'status-used';
+        else if (code.status === 'unused') statusClass = 'status-unused';
+        else statusClass = 'status-disabled';
+        row.insertCell(1).innerHTML = `<span class="status-badge ${statusClass}">${code.status.toUpperCase()}</span>`;
+        
+        // Toggle button
+        const toggleBtn = document.createElement('button');
+        toggleBtn.className = `btn-admin ${code.status === 'disabled' ? 'btn-admin-primary' : 'btn-admin-warning'}`;
+        toggleBtn.innerText = code.status === 'disabled' ? 'Enable' : 'Disable';
+        toggleBtn.onclick = () => toggleCodeStatus(code.id, code.status);
+        const toggleCell = row.insertCell(2);
+        toggleCell.appendChild(toggleBtn);
+        
+        // Session / device info (server stores used_by_session)
+        row.insertCell(3).innerHTML = code.used_by_session ? `${escapeHtml(code.used_by_session.substring(0, 16))}...` : '—';
+        row.insertCell(4).innerHTML = code.used_at ? new Date(code.used_at).toLocaleString() : '—';
+        row.insertCell(5).innerHTML = code.expires_at ? new Date(code.expires_at).toLocaleDateString() : 'Never';
+        
+        // Delete button
+        const actions = document.createElement('td');
+        const delBtn = document.createElement('button');
+        delBtn.innerText = 'Delete';
+        delBtn.className = 'btn-admin btn-admin-danger';
+        delBtn.onclick = () => deleteCode(code.id, code.code);
+        actions.appendChild(delBtn);
+        row.appendChild(actions);
+      }
+      
+      // Attach copy handlers
+      document.querySelectorAll('[data-copy]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const codeVal = btn.getAttribute('data-copy');
+          navigator.clipboard.writeText(codeVal);
+          const msg = document.getElementById('genMsg');
+          if (msg) {
+            msg.innerText = `📋 Code ${codeVal} copied!`;
+            setTimeout(() => { if(msg) msg.innerText = ''; }, 2000);
+          }
+        });
+      });
+    }
+    
+    // Simple escape to prevent XSS
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str.replace(/[&<>]/g, function(m) {
+        if (m === '&') return '&amp;';
+        if (m === '<') return '&lt;';
+        if (m === '>') return '&gt;';
+        return m;
+      });
+    }
+    
+    // Render login form
+    function renderLogin() {
+      const container = document.getElementById('adminPanel');
+      container.innerHTML = `
+        <div style="text-align:center;">
+          <h2 style="margin-bottom:20px;">Admin Access</h2>
+          <input type="password" id="adminPass" class="access-input" style="max-width:280px;" placeholder="Administrator password">
+          <button id="adminLoginBtn" class="verify-btn" style="margin-top:16px;">Authenticate</button>
+          <div id="loginError" class="access-error" style="margin-top:12px;"></div>
+        </div>
+      `;
+      const loginBtn = document.getElementById('adminLoginBtn');
+      if (loginBtn) {
+        loginBtn.addEventListener('click', () => {
+          const pass = document.getElementById('adminPass').value;
+          adminLogin(pass);
+        });
+      }
+    }
+    
+    // Render admin dashboard
+    function renderDashboard() {
+      const container = document.getElementById('adminPanel');
+      container.innerHTML = `
+        <div>
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; margin-bottom:24px;">
+            <h2>Code Vault Admin</h2>
+            <button id="logoutAdminBtn" class="btn-admin" style="background:#3a3f4e;">Logout</button>
+          </div>
+          <div class="stat-cards" id="statCards"></div>
+          <div class="generate-panel">
+            <h3>Generate Codes</h3>
+            <div style="display:flex; gap:12px; flex-wrap:wrap; margin:16px 0;">
+              <input type="number" id="expiryDays" placeholder="Expiration (days)" style="background:#0a0d14; border:1px solid #2a2f3c; padding:8px 12px; border-radius:30px; color:white; width:160px;">
+              <input type="number" id="bulkCount" placeholder="Quantity (1-50)" value="1" min="1" max="50" style="background:#0a0d14; border:1px solid #2a2f3c; padding:8px 12px; border-radius:30px; color:white; width:120px;">
+              <button id="genSingleBtn" class="btn-admin btn-admin-primary">+ Generate Single</button>
+              <button id="genBulkBtn" class="btn-admin btn-admin-primary">📦 Generate Bulk</button>
+            </div>
+            <div id="genMsg" style="font-size:13px; color:#b9c3e0;"></div>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:12px;">
+            <h3>Code Registry</h3>
+            <input type="text" id="searchCodes" class="search-input" placeholder="Search by code or session...">
+          </div>
+          <div style="overflow-x:auto;">
+            <table class="admin-table">
+              <thead>
+                <tr><th>Code</th><th>Status</th><th>Enable/Disable</th><th>Used By (Session)</th><th>Activation Date</th><th>Expires</th><th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="codesTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      `;
+      
+      // Attach event listeners
+      document.getElementById('genSingleBtn')?.addEventListener('click', () => generateCodes(false));
+      document.getElementById('genBulkBtn')?.addEventListener('click', () => generateCodes(true));
+      document.getElementById('logoutAdminBtn')?.addEventListener('click', adminLogout);
+      document.getElementById('searchCodes')?.addEventListener('keyup', () => refreshDashboard());
+      
+      // Initial load
+      refreshDashboard();
+    }
+    
+    // Start
+    checkAdminAuth();
+  })();
+</script>
+</body>
+</html>
