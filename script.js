@@ -1,249 +1,240 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Admin Portal - Code Management</title>
-  <link rel="stylesheet" href="style.css">
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-</head>
-<body>
-<div id="adminApp" class="admin-login-container">
-  <div class="admin-card" id="adminPanel"></div>
-</div>
+// script.js - Fixed enable/disable logic, proper status handling
 
-<script>
-  const SUPABASE_URL = "https://ytqzsgnlkevcsnoqilvv.supabase.co";
-  const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl0cXpzZ25sa2V2Y3Nub3FpbHZ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwNTk5MjMsImV4cCI6MjA5NTYzNTkyM30.sV9QfiMjaWcAU0PYy8D-S75LwOT28o1k0qqwhNl_Uio";
-  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-  const ADMIN_SESSION_KEY = 'gamevault_admin_auth';
-  const ADMIN_PASSWORD = 'Admin@2026Vault';  // Change to your super unique password
+const SUPABASE_URL = "https://ytqzsgnlkevcsnoqilvv.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl0cXpzZ25sa2V2Y3Nub3FpbHZ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwNTk5MjMsImV4cCI6MjA5NTYzNTkyM30.sV9QfiMjaWcAU0PYy8D-S75LwOT28o1k0qqwhNl_Uio";
 
-  function generateStrongCode() {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ0123456789';
-    const segments = [];
-    for (let i = 0; i < 3; i++) {
-      let seg = '';
-      for (let j = 0; j < 4; j++) seg += chars.charAt(Math.floor(Math.random() * chars.length));
-      segments.push(seg);
+const supabase = window.supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_KEY
+);
+
+console.log("Supabase Connected");
+
+(function() {
+  const STORAGE_KEYS = {
+    ACCESS_GRANTED: 'gamevault_access_granted',
+    GRANTED_CODE: 'gamevault_used_code',
+    DEVICE_ID: 'gamevault_device_id'
+  };
+  const CODES_DB_KEY = 'gamevault_codes_db';
+
+  // Device fingerprint
+  function getDeviceId() {
+    let deviceId = localStorage.getItem(STORAGE_KEYS.DEVICE_ID);
+    if (!deviceId) {
+      const fingerprint = navigator.userAgent + navigator.language + screen.width + screen.height + new Date().getTimezoneOffset();
+      let hash = 0;
+      for (let i = 0; i < fingerprint.length; i++) {
+        hash = ((hash << 5) - hash) + fingerprint.charCodeAt(i);
+        hash |= 0;
+      }
+      deviceId = 'DEV_' + Math.abs(hash).toString(36) + '_' + Date.now().toString(36);
+      localStorage.setItem(STORAGE_KEYS.DEVICE_ID, deviceId);
     }
-    return segments.join('-');
+    return deviceId;
   }
 
-  async function fetchAllCodes() {
-    const { data, error } = await supabase.from('access_codes').select('*').order('created_at', { ascending: false });
-    if (error) {
-      console.error("Fetch error:", error);
-      return [];
+  function getCodesDB() {
+    const raw = localStorage.getItem(CODES_DB_KEY);
+    if (!raw) {
+      const defaultCodes = [{
+        id: 'init1',
+        code: 'GVX-8F2K-9QPL',
+        status: 'unused',
+        usedByDevice: null,
+        usedAt: null,
+        createdAt: Date.now(),
+        expiresAt: null
+      }];
+      localStorage.setItem(CODES_DB_KEY, JSON.stringify(defaultCodes));
+      return defaultCodes;
     }
-    return data || [];
+    return JSON.parse(raw);
   }
 
-  async function insertCode(code, expiresAt) {
-    const { error } = await supabase.from('access_codes').insert([{
-      code: code,
-      status: 'unused',
-      used_by_device: null,
-      used_at: null,
-      created_at: new Date().toISOString(),
-      expires_at: expiresAt
-    }]);
-    if (error) console.error("Insert error:", error);
-    return !error;
+  function saveCodesDB(codes) {
+    localStorage.setItem(CODES_DB_KEY, JSON.stringify(codes));
+    // Trigger storage event for cross-tab sync
+    window.dispatchEvent(new StorageEvent('storage', { key: CODES_DB_KEY, newValue: JSON.stringify(codes) }));
   }
 
-  async function deleteCode(codeId) {
-    const { error } = await supabase.from('access_codes').delete().eq('id', codeId);
-    return !error;
-  }
-
-  async function toggleCodeStatus(codeId, currentStatus) {
-    // First get the current code data to check used_by_device
-    const { data: codeData, error } = await supabase
-      .from('access_codes')
-      .select('used_by_device')
-      .eq('id', codeId)
-      .single();
-    if (error) {
-      console.error("Toggle fetch error:", error);
+  // Check if code is valid for initial activation (unused, not disabled, not expired, not deleted)
+  function isCodeValidForActivation(codeToCheck) {
+    const codes = getCodesDB();
+    const found = codes.find(c => c.code === codeToCheck);
+    if (!found) return false;
+    if (found.status === 'used') return false;
+    if (found.status === 'disabled') return false;
+    if (found.status === 'expired') return false;
+    if (found.status === 'deleted') return false;
+    if (found.expiresAt && Date.now() > found.expiresAt) {
+      // Auto-update expired status
+      found.status = 'expired';
+      saveCodesDB(codes);
       return false;
     }
-    let newStatus;
-    if (currentStatus === 'disabled') {
-      // Enabling: restore to 'used' if it had a device, otherwise 'unused'
-      newStatus = codeData?.used_by_device ? 'used' : 'unused';
-    } else {
-      // Disabling: set to 'disabled'
-      newStatus = 'disabled';
+    return true;
+  }
+
+  // Mark code as used (for first-time activation)
+  function consumeCode(code, deviceId) {
+    const codes = getCodesDB();
+    const index = codes.findIndex(c => c.code === code);
+    if (index === -1) return false;
+    const codeObj = codes[index];
+    if (codeObj.status !== 'unused') return false;
+    if (codeObj.expiresAt && Date.now() > codeObj.expiresAt) {
+      codeObj.status = 'expired';
+      saveCodesDB(codes);
+      return false;
     }
-    const { error: updateError } = await supabase
-      .from('access_codes')
-      .update({ status: newStatus })
-      .eq('id', codeId);
-    if (updateError) console.error("Toggle update error:", updateError);
-    return !updateError;
+    codeObj.status = 'used';
+    codeObj.usedByDevice = deviceId;
+    codeObj.usedAt = Date.now();
+    saveCodesDB(codes);
+    return true;
   }
 
-  function isAdminAuthenticated() { 
-    return sessionStorage.getItem(ADMIN_SESSION_KEY) === 'true'; 
+  // Validate current session (on each page load)
+  function isSessionValid() {
+    const granted = localStorage.getItem(STORAGE_KEYS.ACCESS_GRANTED);
+    if (granted !== 'true') return false;
+    const usedCode = localStorage.getItem(STORAGE_KEYS.GRANTED_CODE);
+    if (!usedCode) return false;
+    const deviceId = getDeviceId();
+    const codes = getCodesDB();
+    const codeEntry = codes.find(c => c.code === usedCode);
+    if (!codeEntry) return false;
+    // Check status: only 'used' is valid for session
+    if (codeEntry.status !== 'used') return false;
+    if (codeEntry.usedByDevice !== deviceId) return false;
+    if (codeEntry.expiresAt && Date.now() > codeEntry.expiresAt) {
+      codeEntry.status = 'expired';
+      saveCodesDB(codes);
+      return false;
+    }
+    return true;
   }
 
-  function renderLogin() {
-    const container = document.getElementById('adminPanel');
-    container.innerHTML = `
-      <div style="text-align:center;">
-        <h2>🔐 Admin Access</h2>
-        <input type="password" id="adminPass" class="access-input" style="max-width:280px;" placeholder="Administrator password">
-        <button id="adminLoginBtn" class="verify-btn" style="margin-top:16px;">Authenticate</button>
-        <div id="loginError" class="access-error"></div>
-      </div>
-    `;
-    document.getElementById('adminLoginBtn')?.addEventListener('click', () => {
-      const pass = document.getElementById('adminPass').value;
-      if (pass === ADMIN_PASSWORD) {
-        sessionStorage.setItem(ADMIN_SESSION_KEY, 'true');
-        renderDashboard();
+  function revokeAccess() {
+    localStorage.removeItem(STORAGE_KEYS.ACCESS_GRANTED);
+    localStorage.removeItem(STORAGE_KEYS.GRANTED_CODE);
+    showAccessModal();
+  }
+
+  function grantAccess(code) {
+    localStorage.setItem(STORAGE_KEYS.ACCESS_GRANTED, 'true');
+    localStorage.setItem(STORAGE_KEYS.GRANTED_CODE, code);
+    hideModalAndShowContent();
+  }
+
+  const modalOverlay = document.getElementById('accessModal');
+  const protectedContent = document.getElementById('protected-content');
+  
+  function showAccessModal() {
+    if (modalOverlay) modalOverlay.style.display = 'flex';
+    if (protectedContent) protectedContent.style.opacity = '0.6';
+    document.body.style.overflow = 'hidden';
+  }
+  
+  function hideModalAndShowContent() {
+    if (modalOverlay) modalOverlay.style.display = 'none';
+    if (protectedContent) protectedContent.style.opacity = '1';
+    document.body.style.overflow = 'auto';
+  }
+
+  function attemptVerification() {
+    const inputField = document.getElementById('accessCodeInput');
+    const errorDiv = document.getElementById('accessError');
+    const enteredCode = inputField.value.trim().toUpperCase();
+    if (!enteredCode) {
+      errorDiv.innerText = 'Please enter an access code.';
+      return;
+    }
+    if (!isCodeValidForActivation(enteredCode)) {
+      errorDiv.innerText = 'Invalid, disabled, expired, or already used code.';
+      return;
+    }
+    const deviceId = getDeviceId();
+    const consumed = consumeCode(enteredCode, deviceId);
+    if (!consumed) {
+      errorDiv.innerText = 'Code activation failed.';
+      return;
+    }
+    grantAccess(enteredCode);
+    errorDiv.innerText = '';
+  }
+
+  // Periodic integrity check (every 2 seconds)
+  function startIntegrityCheck() {
+    setInterval(() => {
+      if (modalOverlay && modalOverlay.style.display !== 'flex') {
+        if (!isSessionValid()) {
+          revokeAccess();
+        }
+      }
+    }, 2000);
+  }
+
+  function initAccessSystem() {
+    getCodesDB(); // ensure DB exists
+    if (isSessionValid()) {
+      hideModalAndShowContent();
+    } else {
+      if (localStorage.getItem(STORAGE_KEYS.ACCESS_GRANTED) === 'true') {
+        revokeAccess();
       } else {
-        document.getElementById('loginError').innerText = 'Invalid admin password.';
+        showAccessModal();
       }
-    });
+    }
+    const verifyBtn = document.getElementById('verifyAccessBtn');
+    if (verifyBtn) verifyBtn.addEventListener('click', attemptVerification);
+    const codeInput = document.getElementById('accessCodeInput');
+    if (codeInput) {
+      codeInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') attemptVerification();
+      });
+    }
+    startIntegrityCheck();
   }
 
-  async function renderDashboard() {
-    const container = document.getElementById('adminPanel');
-    container.innerHTML = `
-      <div>
-        <div style="display:flex; justify-content:space-between; margin-bottom:24px;">
-          <h2>🎮 Code Vault Admin</h2>
-          <button id="logoutAdminBtn" class="btn-admin">Logout</button>
-        </div>
-        <div class="stat-cards" id="statCards"></div>
-        <div class="generate-panel">
-          <h3>Generate Codes</h3>
-          <div style="display:flex; gap:12px; flex-wrap:wrap;">
-            <input type="number" id="expiryDays" placeholder="Expiration (days)" style="background:#0a0d14; border:1px solid #2a2f3c; padding:8px 12px; border-radius:30px; color:white;">
-            <input type="number" id="bulkCount" placeholder="Quantity (1-20)" value="1" min="1" max="20" style="background:#0a0d14; border:1px solid #2a2f3c; padding:8px 12px; border-radius:30px; color:white;">
-            <button id="genSingleBtn" class="btn-admin btn-admin-primary">+ Generate Single</button>
-            <button id="genBulkBtn" class="btn-admin btn-admin-primary">⚡ Generate Bulk</button>
-          </div>
-          <div id="genMsg" style="margin-top:12px;"></div>
-        </div>
-        <div style="margin:20px 0;">
-          <input type="text" id="searchCodes" class="search-input" placeholder="Search by code or device...">
-        </div>
-        <div style="overflow-x:auto;">
-          <table class="admin-table">
-            <thead>
-              <tr><th>Code</th><th>Status</th><th>Enable/Disable</th><th>Used By</th><th>Activation Date</th><th>Expires</th><th>Actions</th></tr>
-            </thead>
-            <tbody id="codesTableBody"></tbody>
-          </table>
-        </div>
-      </div>
-    `;
-
-    const refreshTable = async () => {
-      const codes = await fetchAllCodes();
-      const total = codes.length;
-      const used = codes.filter(c => c.status === 'used').length;
-      const unused = codes.filter(c => c.status === 'unused').length;
-      const disabled = codes.filter(c => c.status === 'disabled').length;
-      const expired = codes.filter(c => c.status === 'expired').length;
-      document.getElementById('statCards').innerHTML = `
-        <div class="stat-card"><div class="stat-number">${total}</div><div>Total</div></div>
-        <div class="stat-card"><div class="stat-number">${used}</div><div>Used</div></div>
-        <div class="stat-card"><div class="stat-number">${unused}</div><div>Unused</div></div>
-        <div class="stat-card"><div class="stat-number">${disabled}</div><div>Disabled</div></div>
-        <div class="stat-card"><div class="stat-number">${expired}</div><div>Expired</div></div>
-      `;
-      const searchTerm = document.getElementById('searchCodes')?.value.toLowerCase() || '';
-      const filtered = codes.filter(c => 
-        c.code.toLowerCase().includes(searchTerm) || 
-        (c.used_by_device && c.used_by_device.toLowerCase().includes(searchTerm))
-      );
-      const tbody = document.getElementById('codesTableBody');
-      tbody.innerHTML = '';
-      for (const c of filtered) {
-        const row = tbody.insertRow();
-        // Code cell with copy button
-        row.insertCell(0).innerHTML = `<span class="code-badge">${c.code}</span><button class="btn-admin" data-copy="${c.code}" style="margin-left:8px;">📋 Copy</button>`;
-        // Status badge
-        let statusClass = c.status === 'used' ? 'status-used' : (c.status === 'unused' ? 'status-unused' : 'status-disabled');
-        row.insertCell(1).innerHTML = `<span class="status-badge ${statusClass}">${c.status.toUpperCase()}</span>`;
-        // Enable/Disable button
-        const toggleBtn = document.createElement('button');
-        toggleBtn.className = `btn-admin ${c.status === 'disabled' ? 'btn-admin-primary' : 'btn-admin-warning'}`;
-        toggleBtn.innerText = c.status === 'disabled' ? 'Enable' : 'Disable';
-        toggleBtn.onclick = async () => {
-          await toggleCodeStatus(c.id, c.status);
-          refreshTable();
-        };
-        row.insertCell(2).appendChild(toggleBtn);
-        // Device info
-        row.insertCell(3).innerHTML = c.used_by_device ? c.used_by_device.substring(0,20)+'…' : '—';
-        row.insertCell(4).innerHTML = c.used_at ? new Date(c.used_at).toLocaleString() : '—';
-        row.insertCell(5).innerHTML = c.expires_at ? new Date(c.expires_at).toLocaleDateString() : 'Never';
-        // Delete button
-        const delBtn = document.createElement('button');
-        delBtn.innerText = 'Delete';
-        delBtn.className = 'btn-admin btn-admin-danger';
-        delBtn.onclick = async () => {
-          if (confirm(`Delete ${c.code}? Users will lose access.`)) {
-            await deleteCode(c.id);
-            refreshTable();
-          }
-        };
-        const actionCell = row.insertCell(6);
-        actionCell.appendChild(delBtn);
-      }
-      // Attach copy event listeners
-      document.querySelectorAll('[data-copy]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          navigator.clipboard.writeText(btn.getAttribute('data-copy'));
-          document.getElementById('genMsg').innerText = 'Copied!';
-          setTimeout(() => document.getElementById('genMsg').innerText = '', 1500);
-        });
+  // Search functionality (original)
+  function bindSearch() {
+    const searchField = document.getElementById('search');
+    if (!searchField) return;
+    const handler = () => {
+      const filter = searchField.value.toLowerCase();
+      document.querySelectorAll('.game-card').forEach(card => {
+        const titleElem = card.querySelector('h3');
+        if (titleElem) {
+          const title = titleElem.innerText.toLowerCase();
+          card.style.display = title.includes(filter) ? '' : 'none';
+        }
       });
     };
-
-    // Event listeners for generation
-    document.getElementById('genSingleBtn')?.addEventListener('click', async () => {
-      const expiryDays = parseInt(document.getElementById('expiryDays')?.value) || null;
-      let expiresAt = null;
-      if (expiryDays) expiresAt = new Date(Date.now() + expiryDays*86400000).toISOString();
-      const newCode = generateStrongCode();
-      const ok = await insertCode(newCode, expiresAt);
-      document.getElementById('genMsg').innerText = ok ? `✔ ${newCode} generated` : 'Error generating code';
-      refreshTable();
-    });
-    document.getElementById('genBulkBtn')?.addEventListener('click', async () => {
-      let count = parseInt(document.getElementById('bulkCount')?.value) || 1;
-      if (count > 20) count = 20;
-      const expiryDays = parseInt(document.getElementById('expiryDays')?.value) || null;
-      let expiresAt = null;
-      if (expiryDays) expiresAt = new Date(Date.now() + expiryDays*86400000).toISOString();
-      let success = 0;
-      for (let i = 0; i < count; i++) {
-        let newCode = generateStrongCode();
-        let ok = await insertCode(newCode, expiresAt);
-        if (ok) success++;
-      }
-      document.getElementById('genMsg').innerText = `✅ ${success} codes generated`;
-      refreshTable();
-    });
-    document.getElementById('searchCodes')?.addEventListener('keyup', () => refreshTable());
-    document.getElementById('logoutAdminBtn')?.addEventListener('click', () => {
-      sessionStorage.removeItem(ADMIN_SESSION_KEY);
-      renderLogin();
-    });
-    await refreshTable();
+    searchField.addEventListener('keyup', handler);
+    const observer = new MutationObserver(() => handler());
+    const gamesGrid = document.getElementById('gamesGrid');
+    if (gamesGrid) observer.observe(gamesGrid, { childList: true, subtree: true });
   }
 
-  function initAdmin() {
-    if (isAdminAuthenticated()) renderDashboard();
-    else renderLogin();
+  // Security: disable right-click and devtools shortcuts
+  document.addEventListener('contextmenu', (e) => e.preventDefault());
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J')) ||
+        (e.ctrlKey && e.key === 'u') || (e.ctrlKey && e.key === 's') ||
+        (e.ctrlKey && e.shiftKey && e.key === 'C')) {
+      e.preventDefault();
+    }
+  });
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      initAccessSystem();
+      bindSearch();
+    });
+  } else {
+    initAccessSystem();
+    bindSearch();
   }
-  initAdmin();
-</script>
-</body>
-</html>
+})();
