@@ -137,18 +137,18 @@
 </div>
 
 <!-- Expiry ticker (shown bottom-right when logged in and code has expiry) -->
-<div id="expiryTicker">⏳ <span id="expiryTickerText"></span></div>
+<div id="expiryTicker"> <span id="expiryTickerText"></span></div>
 
 <!-- Access Code Modal -->
 <div id="accessModal" class="access-modal-overlay">
   <div class="access-modal glass-panel">
-    <div class="modal-icon">🔐</div>
+    <div class="modal-icon"></div>
     <h2>Secure Access Required</h2>
     <p><br>Enter your one-time access code to continue.</p>
     <input type="text" id="accessCodeInput" class="access-input" placeholder="XXXX-XXXX-XXXX" autocomplete="off">
     <div id="accessError" class="access-error"></div>
     <button id="verifyAccessBtn" class="verify-btn">UNLOCK GAMEVAULT</button>
-    <div id="expiryBadge">⏳ <span id="expiryBadgeText"></span></div>
+    <div id="expiryBadge"> <span id="expiryBadgeText"></span></div>
     <div class="modal-footer">Contact support if you lost your code.</div>
   </div>
 </div>
@@ -156,7 +156,7 @@
 <!-- Revoked / Expired overlay (shown when code is disabled, deleted, or expired while inside) -->
 <div id="revokedOverlay">
   <div class="revoked-card">
-    <div class="revoked-icon" id="revokedIcon">🚫</div>
+    <div class="revoked-icon" id="revokedIcon"></div>
     <h2 id="revokedTitle">Access Revoked</h2>
     <p id="revokedMsg">Your access code has been disabled or deleted. Please contact support to get a new code.</p>
     <div class="sub">Contact support if you believe this is a mistake.</div>
@@ -230,14 +230,14 @@
     document.getElementById('protected-content').style.display = 'none';
     document.getElementById('accessModal').style.display = 'none';
 
-    const icons   = { disabled:'🚫', deleted:'🗑️', expired:'⏰' };
+    const icons   = { disabled:'', deleted:'', expired:'' };
     const titles  = { disabled:'Access Disabled', deleted:'Code Deleted', expired:'Code Expired' };
     const msgs    = {
       disabled: 'Your access code has been disabled by the administrator.',
       deleted:  'Your access code has been deleted. Please contact support for a new one.',
       expired:  'Your access code has expired. Please contact support to renew your access.'
     };
-    document.getElementById('revokedIcon').innerText  = icons[reason]  || '🚫';
+    document.getElementById('revokedIcon').innerText  = icons[reason]  || '';
     document.getElementById('revokedTitle').innerText = titles[reason] || 'Access Revoked';
     document.getElementById('revokedMsg').innerText   = msgs[reason]   || msgs.disabled;
     document.getElementById('revokedOverlay').classList.add('show');
@@ -338,7 +338,7 @@
       const snap = await getDoc(doc(db, 'codes', codeKey));
 
       if (!snap.exists()) {
-        if (!silent) showError('❌ Code not found.');
+        if (!silent) showError('Code not found.');
         revokeLocalAccess();
         return { ok: false };
       }
@@ -346,7 +346,7 @@
       const data = snap.data();
 
       if (data.status === 'disabled') {
-        if (!silent) showError('🚫 This code has been disabled.');
+        if (!silent) showError(' This code has been disabled.');
         revokeLocalAccess();
         return { ok: false };
       }
@@ -355,7 +355,7 @@
       if (data.expires_at) {
         const expiry = data.expires_at.toDate ? data.expires_at.toDate() : new Date(data.expires_at);
         if (new Date() > expiry) {
-          if (!silent) showError('⏰ This code has expired.');
+          if (!silent) showError(' This code has expired.');
           revokeLocalAccess();
           return { ok: false };
         }
@@ -377,7 +377,7 @@
 
       const sessionId = getSessionId();
       if (data.status === 'used' && data.used_by_session && data.used_by_session !== sessionId) {
-        if (!silent) showError('⚠️ This code has already been used on another device.');
+        if (!silent) showError(' This code has already been used on another device.');
         revokeLocalAccess();
         return { ok: false };
       }
