@@ -8,11 +8,80 @@
   <link rel="stylesheet" href="style.css" />
   <script src="js/games-data.js" defer></script>
   <script src="js/index-app.js" defer></script>
-
-  <!-- Hide everything immediately before any render -->
   <style>
     #protected-content { display: none; }
     #accessModal { display: none; }
+
+    /* Revoked / Expired overlay */
+    #revokedOverlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(5,7,12,0.97);
+      backdrop-filter: blur(16px);
+      z-index: 20000;
+      align-items: center;
+      justify-content: center;
+    }
+    #revokedOverlay.show { display: flex; }
+    .revoked-card {
+      background: rgba(18,22,30,0.92);
+      border-radius: 36px;
+      border: 1px solid rgba(255,100,100,0.3);
+      box-shadow: 0 25px 45px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,80,80,0.15);
+      padding: 40px 36px;
+      width: 90%;
+      max-width: 420px;
+      text-align: center;
+      animation: modalFadeIn 0.35s cubic-bezier(0.2,0.9,0.4,1.1);
+    }
+    .revoked-icon { font-size: 52px; margin-bottom: 16px; }
+    .revoked-card h2 {
+      font-size: 24px;
+      font-weight: 800;
+      background: linear-gradient(120deg, #ff8a7a, #ff4545);
+      background-clip: text;
+      -webkit-background-clip: text;
+      color: transparent;
+      margin-bottom: 12px;
+    }
+    .revoked-card p { color: #b9c3e0; font-size: 14px; line-height: 1.6; margin-bottom: 24px; }
+    .revoked-card .sub { color: #6f7893; font-size: 12px; margin-top: 20px; border-top: 1px solid #2a2f3c; padding-top: 16px; }
+
+    /* Expiry countdown badge on modal */
+    #expiryBadge {
+      display: none;
+      margin: 12px auto 0;
+      background: #1e2430;
+      border: 1px solid #3a2f1a;
+      border-radius: 30px;
+      padding: 7px 16px;
+      font-size: 12px;
+      color: #e7b42c;
+      width: fit-content;
+    }
+    #expiryBadge.show { display: block; }
+
+    /* Live expiry ticker shown when user is inside */
+    #expiryTicker {
+      display: none;
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: rgba(18,22,30,0.92);
+      backdrop-filter: blur(8px);
+      border: 1px solid #2a2f3c;
+      border-radius: 40px;
+      padding: 8px 18px;
+      font-size: 12px;
+      color: #e7b42c;
+      z-index: 5000;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+      transition: opacity 0.3s;
+    }
+    #expiryTicker.show { display: block; }
+    #expiryTicker.urgent { border-color: #c24a4a; color: #ff8a7a; animation: pulse 1s infinite; }
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.6; } }
   </style>
 </head>
 <body>
@@ -67,76 +136,201 @@
   </footer>
 </div>
 
+<!-- Expiry ticker (shown bottom-right when logged in and code has expiry) -->
+<div id="expiryTicker">⏳ <span id="expiryTickerText"></span></div>
+
 <!-- Access Code Modal -->
 <div id="accessModal" class="access-modal-overlay">
   <div class="access-modal glass-panel">
-    <div class="modal-icon"></div>
+    <div class="modal-icon">🔐</div>
     <h2>Secure Access Required</h2>
     <p><br>Enter your one-time access code to continue.</p>
     <input type="text" id="accessCodeInput" class="access-input" placeholder="XXXX-XXXX-XXXX" autocomplete="off">
     <div id="accessError" class="access-error"></div>
     <button id="verifyAccessBtn" class="verify-btn">UNLOCK GAMEVAULT</button>
+    <div id="expiryBadge">⏳ <span id="expiryBadgeText"></span></div>
     <div class="modal-footer">Contact support if you lost your code.</div>
+  </div>
+</div>
+
+<!-- Revoked / Expired overlay (shown when code is disabled, deleted, or expired while inside) -->
+<div id="revokedOverlay">
+  <div class="revoked-card">
+    <div class="revoked-icon" id="revokedIcon">🚫</div>
+    <h2 id="revokedTitle">Access Revoked</h2>
+    <p id="revokedMsg">Your access code has been disabled or deleted. Please contact support to get a new code.</p>
+    <div class="sub">Contact support if you believe this is a mistake.</div>
   </div>
 </div>
 
 <!-- Firebase SDK -->
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getFirestore, doc, getDoc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { initializeApp }    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getFirestore, doc, getDoc, onSnapshot, updateDoc, serverTimestamp }
+    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-
+  // ======================================================
+  // 🔥 PASTE YOUR FIREBASE CONFIG HERE
+  // ======================================================
   const firebaseConfig = {
-    apiKey: "AIzaSyCMKY0LTMwcVW__SkhxGBz3rcvjvWjUGtU",
-    authDomain: "gamevault-380f7.firebaseapp.com",
-    projectId: "gamevault-380f7",
-    storageBucket: "gamevault-380f7.firebasestorage.app",
-    messagingSenderId: "533825597908",
-    appId: "1:533825597908:web:598d526a9dc4c6ea6de641",
-    measurementId: "G-SKDJVGJ4S0"
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT.firebaseapp.com",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_PROJECT.appspot.com",
+    messagingSenderId: "YOUR_SENDER_ID",
+    appId: "YOUR_APP_ID"
   };
   // ======================================================
 
   const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
+  const db  = getFirestore(app);
 
-  const STORAGE_KEY_ACCESS  = 'gv_access';   // 'granted'
-  const STORAGE_KEY_CODE    = 'gv_code';     // the actual code used
-  const STORAGE_KEY_SESSION = 'gv_session';  // unique browser session ID
+  const KEY_ACCESS  = 'gv_access';
+  const KEY_CODE    = 'gv_code';
+  const KEY_SESSION = 'gv_session';
 
+  let liveUnsubscribe = null;   // Firestore real-time listener teardown
+  let expiryInterval  = null;   // countdown interval
+
+  // ── Session ID ─────────────────────────────────────────
   function getSessionId() {
-    let sid = localStorage.getItem(STORAGE_KEY_SESSION);
+    let sid = localStorage.getItem(KEY_SESSION);
     if (!sid) {
-      sid = 'sess_' + Math.random().toString(36).substr(2, 16) + Date.now().toString(36);
-      localStorage.setItem(STORAGE_KEY_SESSION, sid);
+      sid = 'sess_' + Math.random().toString(36).substr(2,16) + Date.now().toString(36);
+      localStorage.setItem(KEY_SESSION, sid);
     }
     return sid;
   }
 
-  // Show main content, hide modal
-  function grantAccess() {
-    document.getElementById('accessModal').style.display = 'none';
+  // ── UI helpers ─────────────────────────────────────────
+  function showError(msg) {
+    const el = document.getElementById('accessError');
+    if (el) el.innerText = msg;
+  }
+
+  function grantAccess(expiresAt = null) {
+    document.getElementById('accessModal').style.display  = 'none';
+    document.getElementById('revokedOverlay').classList.remove('show');
     document.getElementById('protected-content').style.display = 'block';
+    startExpiryTicker(expiresAt);
   }
 
-  // Show modal, hide main content
   function requireCode() {
-    document.getElementById('accessModal').style.display = 'flex';
+    stopLiveListener();
+    stopExpiryTicker();
     document.getElementById('protected-content').style.display = 'none';
+    document.getElementById('revokedOverlay').classList.remove('show');
+    document.getElementById('accessModal').style.display = 'flex';
   }
 
-  // Clear saved access (used if code was disabled/deleted after the fact)
+  function showRevoked(reason = 'disabled') {
+    stopLiveListener();
+    stopExpiryTicker();
+    revokeLocalAccess();
+    document.getElementById('protected-content').style.display = 'none';
+    document.getElementById('accessModal').style.display = 'none';
+
+    const icons   = { disabled:'🚫', deleted:'🗑️', expired:'⏰' };
+    const titles  = { disabled:'Access Disabled', deleted:'Code Deleted', expired:'Code Expired' };
+    const msgs    = {
+      disabled: 'Your access code has been disabled by the administrator.',
+      deleted:  'Your access code has been deleted. Please contact support for a new one.',
+      expired:  'Your access code has expired. Please contact support to renew your access.'
+    };
+    document.getElementById('revokedIcon').innerText  = icons[reason]  || '🚫';
+    document.getElementById('revokedTitle').innerText = titles[reason] || 'Access Revoked';
+    document.getElementById('revokedMsg').innerText   = msgs[reason]   || msgs.disabled;
+    document.getElementById('revokedOverlay').classList.add('show');
+  }
+
   function revokeLocalAccess() {
-    localStorage.removeItem(STORAGE_KEY_ACCESS);
-    localStorage.removeItem(STORAGE_KEY_CODE);
+    localStorage.removeItem(KEY_ACCESS);
+    localStorage.removeItem(KEY_CODE);
   }
 
-  // ── Core verify logic ──────────────────────────────────
+  // ── Expiry countdown ticker ────────────────────────────
+  function startExpiryTicker(expiresAt) {
+    stopExpiryTicker();
+    if (!expiresAt) return;
+
+    const ticker     = document.getElementById('expiryTicker');
+    const tickerText = document.getElementById('expiryTickerText');
+    ticker.classList.add('show');
+
+    function update() {
+      const diff = expiresAt - Date.now();
+      if (diff <= 0) {
+        stopExpiryTicker();
+        showRevoked('expired');
+        return;
+      }
+      const d = Math.floor(diff / 86400000);
+      const h = Math.floor((diff % 86400000) / 3600000);
+      const m = Math.floor((diff % 3600000)  / 60000);
+      const s = Math.floor((diff % 60000)    / 1000);
+
+      let label;
+      if (d > 0)      label = `Code expires in ${d}d ${h}h ${m}m`;
+      else if (h > 0) label = `Code expires in ${h}h ${m}m ${s}s`;
+      else            label = `Code expires in ${m}m ${s}s`;
+
+      tickerText.innerText = label;
+      // Turn red when under 1 hour
+      ticker.classList.toggle('urgent', diff < 3600000);
+    }
+
+    update();
+    expiryInterval = setInterval(update, 1000);
+  }
+
+  function stopExpiryTicker() {
+    if (expiryInterval) { clearInterval(expiryInterval); expiryInterval = null; }
+    const ticker = document.getElementById('expiryTicker');
+    ticker.classList.remove('show', 'urgent');
+  }
+
+  // ── Real-time listener: detects admin disable/delete ──
+  function startLiveListener(codeKey) {
+    stopLiveListener();
+    const codeRef = doc(db, 'codes', codeKey);
+
+    liveUnsubscribe = onSnapshot(codeRef, (snap) => {
+      if (!snap.exists()) {
+        // Admin deleted the code
+        showRevoked('deleted');
+        return;
+      }
+      const data = snap.data();
+
+      if (data.status === 'disabled') {
+        showRevoked('disabled');
+        return;
+      }
+
+      if (data.expires_at) {
+        const expiry = data.expires_at.toDate ? data.expires_at.toDate() : new Date(data.expires_at);
+        if (new Date() > expiry) {
+          showRevoked('expired');
+          return;
+        }
+        // Update ticker with latest expiry from Firestore (in case it changed)
+        startExpiryTicker(expiry.getTime());
+      }
+    }, (err) => {
+      console.warn('Live listener error:', err);
+    });
+  }
+
+  function stopLiveListener() {
+    if (liveUnsubscribe) { liveUnsubscribe(); liveUnsubscribe = null; }
+  }
+
+  // ── Core verify ────────────────────────────────────────
   async function verifyCode(rawCode, silent = false) {
     const normalized = rawCode.trim().toUpperCase().replace(/-/g, '');
     if (normalized.length !== 12) {
       if (!silent) showError('Invalid format. Expected XXXX-XXXX-XXXX.');
-      return false;
+      return { ok: false };
     }
     const codeKey = normalized.substring(0,4) + '-' + normalized.substring(4,8) + '-' + normalized.substring(8,12);
 
@@ -144,36 +338,50 @@
       const snap = await getDoc(doc(db, 'codes', codeKey));
 
       if (!snap.exists()) {
-        if (!silent) showError(' Code not found.');
+        if (!silent) showError('❌ Code not found.');
         revokeLocalAccess();
-        return false;
+        return { ok: false };
       }
 
       const data = snap.data();
 
       if (data.status === 'disabled') {
-        if (!silent) showError(' This code has been disabled.');
+        if (!silent) showError('🚫 This code has been disabled.');
         revokeLocalAccess();
-        return false;
+        return { ok: false };
       }
 
+      let expiresAt = null;
       if (data.expires_at) {
         const expiry = data.expires_at.toDate ? data.expires_at.toDate() : new Date(data.expires_at);
         if (new Date() > expiry) {
-          if (!silent) showError('This code has expired.');
+          if (!silent) showError('⏰ This code has expired.');
           revokeLocalAccess();
-          return false;
+          return { ok: false };
+        }
+        expiresAt = expiry.getTime();
+
+        // Show expiry badge on modal (before granting access)
+        if (!silent) {
+          const diff = expiresAt - Date.now();
+          const d = Math.floor(diff / 86400000);
+          const h = Math.floor((diff % 86400000) / 3600000);
+          const badge = document.getElementById('expiryBadge');
+          const badgeText = document.getElementById('expiryBadgeText');
+          if (badge && badgeText) {
+            badgeText.innerText = d > 0 ? `Expires in ${d}d ${h}h` : `Expires in ${h}h`;
+            badge.classList.add('show');
+          }
         }
       }
 
       const sessionId = getSessionId();
       if (data.status === 'used' && data.used_by_session && data.used_by_session !== sessionId) {
-        if (!silent) showError(' This code has already been used on another device.');
+        if (!silent) showError('⚠️ This code has already been used on another device.');
         revokeLocalAccess();
-        return false;
+        return { ok: false };
       }
 
-      // Mark used on first-time verification
       if (data.status !== 'used') {
         await updateDoc(doc(db, 'codes', codeKey), {
           status: 'used',
@@ -182,72 +390,56 @@
         });
       }
 
-      // Save to localStorage so refresh skips the modal
-      localStorage.setItem(STORAGE_KEY_ACCESS, 'granted');
-      localStorage.setItem(STORAGE_KEY_CODE, codeKey);
-      return true;
+      localStorage.setItem(KEY_ACCESS, 'granted');
+      localStorage.setItem(KEY_CODE, codeKey);
+      return { ok: true, codeKey, expiresAt };
 
     } catch (err) {
       console.error('Firebase error:', err);
-      if (!silent) showError(' Error verifying. Check Firebase config.');
-      return false;
+      if (!silent) showError('⚠️ Error verifying. Check Firebase config.');
+      return { ok: false };
     }
   }
 
-  function showError(msg) {
-    const el = document.getElementById('accessError');
-    if (el) el.innerText = msg;
+  // ── Shared submit handler ──────────────────────────────
+  async function handleSubmit() {
+    const btn  = document.getElementById('verifyAccessBtn');
+    const code = document.getElementById('accessCodeInput').value;
+    btn.disabled = true;
+    btn.innerText = 'Verifying...';
+    showError('');
+
+    const result = await verifyCode(code, false);
+    if (result.ok) {
+      grantAccess(result.expiresAt);
+      startLiveListener(result.codeKey);
+    } else {
+      btn.disabled = false;
+      btn.innerText = 'UNLOCK GAMEVAULT';
+    }
   }
 
   // ── Init ───────────────────────────────────────────────
   window.addEventListener('DOMContentLoaded', async () => {
-    const savedAccess = localStorage.getItem(STORAGE_KEY_ACCESS);
-    const savedCode   = localStorage.getItem(STORAGE_KEY_CODE);
+    const savedAccess = localStorage.getItem(KEY_ACCESS);
+    const savedCode   = localStorage.getItem(KEY_CODE);
 
     if (savedAccess === 'granted' && savedCode) {
-      // Re-verify silently on every refresh — checks if code is still valid/not disabled
-      const stillValid = await verifyCode(savedCode, true);
-      if (stillValid) {
-        grantAccess();
+      const result = await verifyCode(savedCode, true);
+      if (result.ok) {
+        grantAccess(result.expiresAt);
+        startLiveListener(result.codeKey);
       } else {
-        // Code was disabled/deleted/expired since last visit
         requireCode();
       }
     } else {
       requireCode();
     }
 
-    // Verify button
-    document.getElementById('verifyAccessBtn').addEventListener('click', async () => {
-      const btn = document.getElementById('verifyAccessBtn');
-      const code = document.getElementById('accessCodeInput').value;
-      btn.disabled = true;
-      btn.innerText = 'Verifying...';
-      showError('');
-      const ok = await verifyCode(code, false);
-      if (ok) {
-        grantAccess();
-      } else {
-        btn.disabled = false;
-        btn.innerText = 'UNLOCK GAMEVAULT';
-      }
-    });
+    document.getElementById('verifyAccessBtn').addEventListener('click', handleSubmit);
 
-    // Enter key
-    document.getElementById('accessCodeInput').addEventListener('keydown', async (e) => {
-      if (e.key !== 'Enter') return;
-      const btn = document.getElementById('verifyAccessBtn');
-      const code = document.getElementById('accessCodeInput').value;
-      btn.disabled = true;
-      btn.innerText = 'Verifying...';
-      showError('');
-      const ok = await verifyCode(code, false);
-      if (ok) {
-        grantAccess();
-      } else {
-        btn.disabled = false;
-        btn.innerText = 'UNLOCK GAMEVAULT';
-      }
+    document.getElementById('accessCodeInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') handleSubmit();
     });
 
     // Auto-format XXXX-XXXX-XXXX
