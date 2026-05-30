@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>GameVault · Secure Game Downloads</title>
+  <link rel="icon" type="image/jpg" href="images/Logo.jpg" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="js/games-data.js" defer></script>
+  <script src="js/index-app.js" defer></script>
+
+  <!-- Hide everything immediately before any render -->
+  <style>
+    #protected-content { display: none; }
+    #accessModal { display: none; }
+  </style>
+</head>
+<body>
+
+<!-- Protected main content -->
+<div id="protected-content">
+  <header class="navbar">
+    <a class="logo" href="index.html" style="text-decoration:none;">GAMEVAULT</a>
+    <nav class="nav">
+      <a class="nav-link" href="index.html">Home</a>
+      <a class="nav-link" href="faq.html">FAQ / Tutorial</a>
+      <div class="nav-dropdown">
+        <button class="nav-link nav-dropbtn" type="button">Category</button>
+        <div class="nav-dropdown-content">
+          <a class="nav-link" href="#" data-category="Action">Action</a>
+          <a class="nav-link" href="#" data-category="Adventure">Adventure</a>
+          <a class="nav-link" href="#" data-category="RPG">RPG</a>
+          <a class="nav-link" href="#" data-category="Horror">Horror</a>
+          <a class="nav-link" href="#" data-category="Simulation">Simulation</a>
+          <a class="nav-link" href="#" data-category="Strategy">Strategy</a>
+          <a class="nav-link" href="#" data-category="Shooter">Shooter</a>
+          <a class="nav-link" href="#" data-category="Sports">Sports</a>
+          <a class="nav-link" href="#" data-category="Open World">Open World</a>
+          <a class="nav-link" href="#" data-category="Survival">Survival</a>
+          <a class="nav-link" href="#" data-category="Fighting">Fighting</a>
+          <a class="nav-link" href="#" data-category="Indie">Indie</a>
+        </div>
+      </div>
+    </nav>
+    <input type="text" id="search" placeholder="Search games...">
+  </header>
+
+  <section class="hero">
+    <div class="hero-content">
+      <h1>FAST DOWNLOAD READY</h1>
+      <p>PC Game • Pre-installed games • One-click access</p>
+    </div>
+  </section>
+
+  <section class="games-section">
+    <div class="section-title"><h2>Trending Game</h2></div>
+    <div class="games-grid" id="gamesGrid"></div>
+  </section>
+
+  <footer class="footer">
+    <div class="footer-social">
+      <a class="social-link" href="https://www.facebook.com/profile.php?id=61590194378758" target="_blank" rel="noopener noreferrer" aria-label="Facebook">
+        <span class="social-icon social-icon-facebook" aria-hidden="true">f</span>
+      </a>
+    </div>
+    <div>© Copyright 2026 All Rights Reserved</div>
+  </footer>
+</div>
+
+<!-- Access Code Modal -->
+<div id="accessModal" class="access-modal-overlay">
+  <div class="access-modal glass-panel">
+    <div class="modal-icon"></div>
+    <h2>Secure Access Required</h2>
+    <p><br>Enter your one-time access code to continue.</p>
+    <input type="text" id="accessCodeInput" class="access-input" placeholder="XXXX-XXXX-XXXX" autocomplete="off">
+    <div id="accessError" class="access-error"></div>
+    <button id="verifyAccessBtn" class="verify-btn">UNLOCK GAMEVAULT</button>
+    <div class="modal-footer">Contact support if you lost your code.</div>
+  </div>
+</div>
+
+<!-- Firebase SDK -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getFirestore, doc, getDoc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyCMKY0LTMwcVW__SkhxGBz3rcvjvWjUGtU",
+    authDomain: "gamevault-380f7.firebaseapp.com",
+    projectId: "gamevault-380f7",
+    storageBucket: "gamevault-380f7.firebasestorage.app",
+    messagingSenderId: "533825597908",
+    appId: "1:533825597908:web:598d526a9dc4c6ea6de641",
+    measurementId: "G-SKDJVGJ4S0"
+  };
+  // ======================================================
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  const STORAGE_KEY_ACCESS  = 'gv_access';   // 'granted'
+  const STORAGE_KEY_CODE    = 'gv_code';     // the actual code used
+  const STORAGE_KEY_SESSION = 'gv_session';  // unique browser session ID
+
+  function getSessionId() {
+    let sid = localStorage.getItem(STORAGE_KEY_SESSION);
+    if (!sid) {
+      sid = 'sess_' + Math.random().toString(36).substr(2, 16) + Date.now().toString(36);
+      localStorage.setItem(STORAGE_KEY_SESSION, sid);
+    }
+    return sid;
+  }
+
+  // Show main content, hide modal
+  function grantAccess() {
+    document.getElementById('accessModal').style.display = 'none';
+    document.getElementById('protected-content').style.display = 'block';
+  }
+
+  // Show modal, hide main content
+  function requireCode() {
+    document.getElementById('accessModal').style.display = 'flex';
+    document.getElementById('protected-content').style.display = 'none';
+  }
+
+  // Clear saved access (used if code was disabled/deleted after the fact)
+  function revokeLocalAccess() {
+    localStorage.removeItem(STORAGE_KEY_ACCESS);
+    localStorage.removeItem(STORAGE_KEY_CODE);
+  }
+
+  // ── Core verify logic ──────────────────────────────────
+  async function verifyCode(rawCode, silent = false) {
+    const normalized = rawCode.trim().toUpperCase().replace(/-/g, '');
+    if (normalized.length !== 12) {
+      if (!silent) showError('Invalid format. Expected XXXX-XXXX-XXXX.');
+      return false;
+    }
+    const codeKey = normalized.substring(0,4) + '-' + normalized.substring(4,8) + '-' + normalized.substring(8,12);
+
+    try {
+      const snap = await getDoc(doc(db, 'codes', codeKey));
+
+      if (!snap.exists()) {
+        if (!silent) showError(' Code not found.');
+        revokeLocalAccess();
+        return false;
+      }
+
+      const data = snap.data();
+
+      if (data.status === 'disabled') {
+        if (!silent) showError(' This code has been disabled.');
+        revokeLocalAccess();
+        return false;
+      }
+
+      if (data.expires_at) {
+        const expiry = data.expires_at.toDate ? data.expires_at.toDate() : new Date(data.expires_at);
+        if (new Date() > expiry) {
+          if (!silent) showError('This code has expired.');
+          revokeLocalAccess();
+          return false;
+        }
+      }
+
+      const sessionId = getSessionId();
+      if (data.status === 'used' && data.used_by_session && data.used_by_session !== sessionId) {
+        if (!silent) showError(' This code has already been used on another device.');
+        revokeLocalAccess();
+        return false;
+      }
+
+      // Mark used on first-time verification
+      if (data.status !== 'used') {
+        await updateDoc(doc(db, 'codes', codeKey), {
+          status: 'used',
+          used_by_session: sessionId,
+          used_at: serverTimestamp()
+        });
+      }
+
+      // Save to localStorage so refresh skips the modal
+      localStorage.setItem(STORAGE_KEY_ACCESS, 'granted');
+      localStorage.setItem(STORAGE_KEY_CODE, codeKey);
+      return true;
+
+    } catch (err) {
+      console.error('Firebase error:', err);
+      if (!silent) showError(' Error verifying. Check Firebase config.');
+      return false;
+    }
+  }
+
+  function showError(msg) {
+    const el = document.getElementById('accessError');
+    if (el) el.innerText = msg;
+  }
+
+  // ── Init ───────────────────────────────────────────────
+  window.addEventListener('DOMContentLoaded', async () => {
+    const savedAccess = localStorage.getItem(STORAGE_KEY_ACCESS);
+    const savedCode   = localStorage.getItem(STORAGE_KEY_CODE);
+
+    if (savedAccess === 'granted' && savedCode) {
+      // Re-verify silently on every refresh — checks if code is still valid/not disabled
+      const stillValid = await verifyCode(savedCode, true);
+      if (stillValid) {
+        grantAccess();
+      } else {
+        // Code was disabled/deleted/expired since last visit
+        requireCode();
+      }
+    } else {
+      requireCode();
+    }
+
+    // Verify button
+    document.getElementById('verifyAccessBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('verifyAccessBtn');
+      const code = document.getElementById('accessCodeInput').value;
+      btn.disabled = true;
+      btn.innerText = 'Verifying...';
+      showError('');
+      const ok = await verifyCode(code, false);
+      if (ok) {
+        grantAccess();
+      } else {
+        btn.disabled = false;
+        btn.innerText = 'UNLOCK GAMEVAULT';
+      }
+    });
+
+    // Enter key
+    document.getElementById('accessCodeInput').addEventListener('keydown', async (e) => {
+      if (e.key !== 'Enter') return;
+      const btn = document.getElementById('verifyAccessBtn');
+      const code = document.getElementById('accessCodeInput').value;
+      btn.disabled = true;
+      btn.innerText = 'Verifying...';
+      showError('');
+      const ok = await verifyCode(code, false);
+      if (ok) {
+        grantAccess();
+      } else {
+        btn.disabled = false;
+        btn.innerText = 'UNLOCK GAMEVAULT';
+      }
+    });
+
+    // Auto-format XXXX-XXXX-XXXX
+    document.getElementById('accessCodeInput').addEventListener('input', (e) => {
+      let val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (val.length > 4) val = val.substring(0,4) + '-' + val.substring(4);
+      if (val.length > 9) val = val.substring(0,9) + '-' + val.substring(9);
+      e.target.value = val.substring(0, 14);
+    });
+  });
+</script>
+
+</body>
+</html>
