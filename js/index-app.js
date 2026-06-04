@@ -107,7 +107,7 @@
       { id: 105, name: "Tekken 8", category: "Fighting", thumb: "https://upload.wikimedia.org/wikipedia/en/thumb/b/b4/Tekken_8_cover_art.jpg/250px-Tekken_8_cover_art.jpg", downloadUrl: "https://bzzhr.to/5imzy2erft79", desc: "King of fighters" },
       { id: 106, name: "NBA 2K12", category: "Sports", thumb: "https://assets-prd.ignimgs.com/2022/10/11/nba2k12-1665504524388.jpg", downloadUrl: "https://datanodes.to/nux6yifhgm0l/NBA-2K12.rar", desc: "Classic basketball" },
       { id: 107, name: "Marvel’s Spider-Man 2", category: "Action, Adventure", thumb: "https://static.wikia.nocookie.net/spidermanps4/images/d/d4/Marvel%27s_Spider-Man_2_front_cover_%28US%29.png/revision/latest?cb=20230608203237", downloadUrl: "https://datanodes.to/tnapz0kt5cvd/Marvels-Spider-Man-2.rar", desc: "Web-swing NYC" },
-      { id: 108, name: "GTA V LITE ", category: "Open World", thumb: "https://liteapks.com/wp-content/uploads/2022/07/gta-v-poster.jpeg", downloadUrl: "https://vikingfile.com/f/bZxzaHgEu8#getea 5 lite v13.2.zip - 43.92 GB", desc: "Rockstar Games" },
+      { id: 108, name: "GTA V LITE ", category: "Open World", thumb: "https://liteapks.com/wp-content/uploads/2022/07/gta-v-poster.jpeg", downloadUrl: "https://vikingfile.com/f/bZxzaHgEu8#getea 5 lite v13.2.zip - 43.92 GB", desc: "Rockstar Games" }
     ];
 
     const grid = document.getElementById("gamesGrid");
