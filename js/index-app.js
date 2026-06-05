@@ -1,7 +1,5 @@
-(function() {
-    // ========== FULL GAMES CATALOG (504 games) ==========
-    // Original IDs 1-107 with real covers, IDs 108-504 with placeholders.
-    const RAW_CATALOG = [
+ (function() {
+     const RAW_CATALOG = [
       { id: 1, name: "Phonopolis", category: "Adventure", thumb: "https://images.igdb.com/igdb/image/upload/t_cover_big_2x/co4uyw.jpg", downloadUrl: "https://bzzhr.to/4is071av60w6", desc: "Musical retro adventure" },
       { id: 2, name: "Cyberpunk 2077", category: "RPG", thumb: "https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/1091500/library_600x900.jpg", downloadUrl: "https://bzzhr.to/u33dxmmaozb6", desc: "Night City open-world RPG" },
       { id: 3, name: "Elden Ring", category: "Action", thumb: "https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/1245620/library_600x900.jpg", downloadUrl: "https://bzzhr.to/u4w8cunxkbrz", desc: "Epic dark fantasy" },
@@ -501,172 +499,71 @@
       { id: 501, name: "Yakuza: Like A Dragon", category: "RPG", thumb: null, downloadUrl: "#", desc: "Turn-based Yakuza" },
       { id: 502, name: "Yes, Your Grace 2: Snowfall", category: "Strategy", thumb: null, downloadUrl: "#", desc: "Medieval kingdom" },
       { id: 503, name: "Yooka-Replaylee", category: "Adventure", thumb: null, downloadUrl: "#", desc: "Platformer remaster" },
-      { id: 504, name: "Zero Sievert", category: "Shooter", thumb: null, downloadUrl: "#", desc: "Tarkov-inspired top-down" }
+      { id: 504, name: "Zero Sievert", category: "Shooter", thumb: null, downloadUrl: "#", desc: "Tarkov-inspired top-down" },
+    
     ];
 
-    const seen = new Map();
-    const GAMES_CATALOG = [];
-    let duplicates = 0;
-    for (const game of RAW_CATALOG) {
-      const key = game.name.toLowerCase();
-      if (!seen.has(key)) {
-        seen.set(key, true);
-        GAMES_CATALOG.push(game);
-      } else {
-        duplicates++;
-        console.warn(`Duplicate removed: "${game.name}" (ID ${game.id})`);
-      }
-    }
-    if (duplicates) console.log(` Removed ${duplicates} duplicates. Final count: ${GAMES_CATALOG.length}`);
+      window.GAMES_CATALOG = RAW_CATALOG;
 
-    function isPlaceholder(url) {
-      return !url || url === "#" || url.includes("placehold.co") || url === "";
-    }
+  // -------------------- your existing render logic --------------------
+  const grid = document.getElementById("gamesGrid");
+  const searchInput = document.getElementById("search");
+  let activeCategory = "";
 
-    const steamCache = new Map();
-    async function fetchSteamThumbnail(gameName) {
-      if (steamCache.has(gameName)) return steamCache.get(gameName);
-      try {
-        const url = `https://store.steampowered.com/api/storesearch?term=${encodeURIComponent(gameName)}&cc=US&l=en`;
-        const res = await fetch(url);
-        const data = await res.json();
-        if (data.items && data.items.length > 0) {
-          const appId = data.items[0].id;
-          const thumb = `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appId}/library_600x900.jpg`;
-          steamCache.set(gameName, thumb);
-          return thumb;
-        }
-      } catch (e) { console.warn(`Steam fetch failed for ${gameName}`, e); }
-      steamCache.set(gameName, null);
-      return null;
-    }
+  function showToast(msg, duration = 1800) {
+    let existing = document.querySelector('.toast-msg');
+    if (existing) existing.remove();
+    let toast = document.createElement('div');
+    toast.className = 'toast-msg';
+    toast.innerText = msg;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), duration);
+  }
 
-    async function enhanceThumbnail(img, gameName, currentSrc) {
-      if (!isPlaceholder(currentSrc)) return;
-      try {
-        const stored = JSON.parse(localStorage.getItem('gameThumbCache') || '{}');
-        if (stored[gameName] && stored[gameName] !== currentSrc) {
-          img.src = stored[gameName];
-          return;
-        }
-      } catch(e) {}
-      const real = await fetchSteamThumbnail(gameName);
-      if (real) {
-        img.src = real;
-        try {
-          const cache = JSON.parse(localStorage.getItem('gameThumbCache') || '{}');
-          cache[gameName] = real;
-          localStorage.setItem('gameThumbCache', JSON.stringify(cache));
-        } catch(e) {}
-      }
-    }
-
-    function getThumbUrl(game) {
-      if (game.thumb && !isPlaceholder(game.thumb)) return game.thumb;
-      return `https://placehold.co/300x450/1e1e2f/7C3AED?text=${encodeURIComponent(game.name)}`;
-    }
-
-    // ---------- DOM elements and rendering ----------
-    const grid = document.getElementById("gamesGrid");
-    const searchInput = document.getElementById("search");
-    let activeCategory = "";
-
-    function showToast(msg, duration = 1800) {
-      const old = document.querySelector(".toast-msg");
-      if (old) old.remove();
-      const toast = document.createElement("div");
-      toast.className = "toast-msg";
-      toast.textContent = msg;
-      document.body.appendChild(toast);
-      setTimeout(() => toast.remove(), duration);
-    }
-
-    function renderGames() {
-      if (!grid) return;
-      const filterText = searchInput ? searchInput.value.toLowerCase() : "";
-      const filtered = GAMES_CATALOG.filter(game => {
-        const matchName = game.name.toLowerCase().includes(filterText);
-        const matchCat = activeCategory === "" || game.category.toLowerCase() === activeCategory.toLowerCase();
-        return matchName && matchCat;
-      });
-      grid.innerHTML = filtered.map(game => `
-        <div class="game-card" data-game-id="${game.id}" data-category="${game.category}" data-game-name="${game.name}">
-          <div class="thumbnail">
-            <img src="${getThumbUrl(game)}" alt="${game.name}" loading="lazy" class="game-thumb" data-game-name="${game.name}">
-            <a href="${game.downloadUrl || "#"}" target="_blank" class="quick-download" data-download-link="${game.downloadUrl || "#"}">DOWNLOAD NOW</a>
-          </div>
-          <div class="game-info">
-            <span class="tag">${game.category || "Unknown"}</span>
-            <h3>${game.name}</h3>
-            <p>${game.desc || ""}</p>
-          </div>
+  function renderGames() {
+    const filterText = searchInput ? searchInput.value.toLowerCase() : "";
+    const filtered = RAW_CATALOG.filter(game => {
+      const matchName = game.name.toLowerCase().includes(filterText);
+      const matchCat = activeCategory === "" || game.category.toLowerCase() === activeCategory.toLowerCase();
+      return matchName && matchCat;
+    });
+    if (!grid) return;
+    grid.innerHTML = filtered.map(game => `
+      <div class="game-card" data-game-id="${game.id}" data-category="${game.category}">
+        <div class="thumbnail">
+          <img src="${game.thumb}" alt="${game.name}" loading="lazy" onerror="this.src='https://placehold.co/300x450?text=Game+Vault'">
+          <a href="${game.downloadUrl}" target="_blank" class="quick-download" data-download-link="${game.downloadUrl}">DOWNLOAD NOW</a>
         </div>
-      `).join('');
+        <div class="game-info">
+          <span class="tag">${game.category}</span>
+          <h3>${game.name}</h3>
+          <p>${game.desc}</p>
+        </div>
+      </div>
+    `).join('');
 
-      document.querySelectorAll('.game-thumb').forEach(img => {
-        const gameName = img.getAttribute('data-game-name');
-        const currentSrc = img.src;
-        enhanceThumbnail(img, gameName, currentSrc);
-      });
-
-      document.querySelectorAll('.quick-download').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const url = btn.getAttribute('data-download-link');
-          if (url && url !== "#") showToast("Starting download...", 1500);
-          else { e.preventDefault(); showToast("Download link unavailable.", 1500); }
-        });
-      });
-
-      const title = document.querySelector(".section-title h2");
-      if (title) title.textContent = `Games (${filtered.length})`;
-    }
-
-    function updateFilters() { renderGames(); }
-
-    if (searchInput) searchInput.addEventListener("input", updateFilters);
-    document.querySelectorAll(".nav-dropdown-content [data-category]").forEach(link => {
-      link.addEventListener("click", (e) => {
-        e.preventDefault();
-        activeCategory = link.dataset.category || "";
-        renderGames();
+    document.querySelectorAll('.quick-download').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const url = btn.getAttribute('data-download-link');
+        showToast(`Download started: ${url.split('/').pop()}`, 1600);
       });
     });
+  }
 
+  function updateFilters() {
     renderGames();
+  }
 
-    // Optional: Game List Modal
-    const modal = document.getElementById('gameListModal');
-    const listBtn = document.getElementById('gameListBtn');
-    if (listBtn && modal) {
-      const closeSpan = modal.querySelector('.close');
-      const listContainer = document.getElementById('gameListContainer');
-      const modalSearch = document.getElementById('modalSearch');
-      function fillList(filter = '') {
-        if (!listContainer) return;
-        const filtered = GAMES_CATALOG.filter(g => g.name.toLowerCase().includes(filter.toLowerCase()));
-        listContainer.innerHTML = filtered.map(g => `<div class="game-list-item" data-game-id="${g.id}">${g.name}</div>`).join('');
-        document.querySelectorAll('.game-list-item').forEach(item => {
-          item.addEventListener('click', () => {
-            const id = item.dataset.gameId;
-            const card = document.querySelector(`.game-card[data-game-id="${id}"]`);
-            if (card) { card.scrollIntoView({ behavior: 'smooth', block: 'center' }); modal.style.display = 'none'; }
-          });
-        });
-      }
-      listBtn.onclick = () => { fillList(); modal.style.display = 'block'; };
-      if (closeSpan) closeSpan.onclick = () => modal.style.display = 'none';
-      window.onclick = (e) => { if (e.target === modal) modal.style.display = 'none'; };
-      if (modalSearch) modalSearch.addEventListener('input', (e) => fillList(e.target.value));
-    }
+  if (searchInput) searchInput.addEventListener('input', updateFilters);
+  document.querySelectorAll('.nav-dropdown-content .nav-link').forEach(catLink => {
+    catLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      const cat = catLink.getAttribute('data-category');
+      activeCategory = cat || "";
+      updateFilters();
+    });
+  });
 
-    // Optional: Stats Overlay
-    const totalSpan = document.getElementById('totalGamesCount');
-    const hotSpan = document.getElementById('hotPickName');
-    if (totalSpan) totalSpan.textContent = GAMES_CATALOG.length;
-    if (hotSpan) {
-      const updateHot = () => { hotSpan.textContent = GAMES_CATALOG[Math.floor(Math.random() * GAMES_CATALOG.length)].name; };
-      updateHot();
-      setInterval(updateHot, 10000);
-    }
+  renderGames();
 })();
