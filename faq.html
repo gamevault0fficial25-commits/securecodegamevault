@@ -2,18 +2,354 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>FAQ - GameVault</title>
-  <link rel="stylesheet" href="style.css" />
-  <link rel="icon" type="image/jpg" href="images/Logo.jpg"></head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>FAQ - GameVault Support</title>
+  <link rel="icon" type="image/jpg" href="images/Logo.jpg">
+  <style>
+    /* ========== FULL style.css (identical vibe) ========== */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+    }
+
+    body {
+      background: #0b0d12;
+      color: #f0f3fa;
+      scroll-behavior: smooth;
+      transition: background 0.2s;
+    }
+
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #181c24;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #7d5fff;
+      border-radius: 12px;
+    }
+
+    /* navbar */
+    .navbar {
+      width: 100%;
+      padding: 16px 5%;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      background: #0f1117ee;
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid #2a2f3c;
+      position: sticky;
+      top: 0;
+      z-index: 1100;
+      gap: 16px;
+    }
+    .logo {
+      font-size: 26px;
+      font-weight: 800;
+      background: linear-gradient(135deg, #a47eff, #7d5fff);
+      background-clip: text;
+      -webkit-background-clip: text;
+      color: transparent;
+      letter-spacing: -0.5px;
+      text-decoration: none;
+    }
+    .nav {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .nav-link {
+      color: #eef2ff;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      padding: 8px 14px;
+      border-radius: 40px;
+      transition: 0.2s;
+      background: transparent;
+    }
+    .nav-link:hover {
+      background: #262c38;
+      color: white;
+    }
+    .nav-dropdown { position: relative; }
+    .nav-dropbtn { background: none; border: none; cursor: pointer; }
+    .nav-dropdown-content {
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      background: #13171f;
+      backdrop-filter: blur(8px);
+      min-width: 180px;
+      border: 1px solid #2f3542;
+      border-radius: 20px;
+      padding: 8px;
+      z-index: 1200;
+      box-shadow: 0 12px 28px rgba(0,0,0,0.5);
+    }
+    .nav-dropdown:hover .nav-dropdown-content { display: block; }
+    .nav-dropdown-content .nav-link {
+      display: block;
+      width: 100%;
+      padding: 10px 16px;
+      border-radius: 14px;
+    }
+    #search {
+      width: 240px;
+      padding: 10px 18px;
+      border: 1px solid #2a2f3c;
+      border-radius: 60px;
+      background: #0b0e14;
+      color: white;
+      font-size: 14px;
+      transition: 0.2s;
+    }
+    #search:focus {
+      outline: none;
+      border-color: #7d5fff;
+      background: #121520;
+    }
+
+    /* hero */
+    .hero {
+      height: 260px;
+      background: linear-gradient(125deg, #0a0c12 0%, #141824 100%), url('https://images.hdqwalls.com/wallpapers/bthumb/black-noir-from-the-boys-in-call-of-duty-mobile-hl.jpg');
+      background-blend-mode: overlay;
+      background-size: cover;
+      background-position: center 30%;
+      display: flex;
+      align-items: center;
+      padding: 0 6%;
+      border-bottom: 1px solid #242933;
+    }
+    .hero h1 {
+      font-size: 3rem;
+      font-weight: 800;
+      background: linear-gradient(to right, #fff, #b9a9ff);
+      background-clip: text;
+      -webkit-background-clip: text;
+      color: transparent;
+    }
+    .hero p {
+      color: #b9c3e0;
+      margin-top: 10px;
+    }
+
+    /* games section (reused for FAQ layout) */
+    .games-section {
+      padding: 50px 5%;
+      max-width: 1600px;
+      margin: 0 auto;
+    }
+    .section-title h2 {
+      font-size: 28px;
+      font-weight: 700;
+      border-left: 5px solid #7d5fff;
+      padding-left: 18px;
+      margin-bottom: 32px;
+    }
+
+    /* FAQ specific cards */
+    .faq-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 32px;
+    }
+    .glass-card {
+      background: #12161f;
+      border-radius: 24px;
+      border: 1px solid #242933;
+      padding: 28px;
+      transition: transform 0.2s, border-color 0.2s;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+    }
+    .glass-card:hover {
+      border-color: #7d5fff;
+    }
+    .video-wrapper {
+      max-width: 480px;
+      margin: 0 auto;
+    }
+    .video-wrapper video {
+      width: 100%;
+      border-radius: 20px;
+      background: #090b10;
+      margin-top: 12px;
+    }
+    .steps-list {
+      padding-left: 1.5rem;
+      margin: 1rem 0 0.5rem;
+    }
+    .steps-list li {
+      margin-bottom: 0.9rem;
+      color: #cdd9ff;
+    }
+    .steps-list li b {
+      color: #7d5fff;
+    }
+    .badge-icon {
+      background: #2a2f40;
+      border-radius: 30px;
+      padding: 0.2rem 0.8rem;
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: #cdd9ff;
+      margin-right: 0.8rem;
+    }
+
+    /* FAQ accordion */
+    .faq-accordion {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      margin-top: 1.5rem;
+    }
+    .faq-item {
+      background: #12161f;
+      border-radius: 20px;
+      border: 1px solid #2a2f3c;
+      overflow: hidden;
+      transition: all 0.2s;
+    }
+    .faq-question {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1.2rem 1.6rem;
+      cursor: pointer;
+      font-weight: 600;
+      background: #0f1119;
+      transition: background 0.2s;
+    }
+    .faq-question:hover {
+      background: #1a1f2c;
+    }
+    .faq-icon {
+      font-size: 1.5rem;
+      font-weight: 300;
+      transition: transform 0.25s;
+      color: #7d5fff;
+    }
+    .faq-item.active .faq-icon {
+      transform: rotate(45deg);
+    }
+    .faq-answer {
+      max-height: 0;
+      padding: 0 1.6rem;
+      overflow: hidden;
+      transition: max-height 0.35s ease-out, padding 0.2s;
+      color: #b0b7cc;
+      border-top: 0px solid transparent;
+    }
+    .faq-item.active .faq-answer {
+      max-height: 250px;
+      padding: 0 1.6rem 1.4rem 1.6rem;
+      border-top: 1px solid #2a2f3c;
+    }
+    .faq-answer p {
+      margin-top: 1rem;
+    }
+    .faq-stats {
+      font-size: 0.8rem;
+      background: #1a1e2a;
+      display: inline-block;
+      padding: 0.3rem 1rem;
+      border-radius: 30px;
+      margin-bottom: 1rem;
+    }
+    .no-faq-message {
+      text-align: center;
+      padding: 2rem;
+      background: #12161f;
+      border-radius: 20px;
+    }
+
+    /* footer */
+    .footer {
+      text-align: center;
+      padding: 32px 20px;
+      color: #8d95aa;
+      border-top: 1px solid #20242d;
+      margin-top: 50px;
+      font-size: 13px;
+    }
+    .social-link {
+      display: inline-flex;
+      background: #1e2430;
+      width: 40px;
+      height: 40px;
+      border-radius: 40px;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+      text-decoration: none;
+      transition: 0.2s;
+    }
+    .social-icon-facebook {
+      font-weight: bold;
+      font-size: 20px;
+      color: #7d5fff;
+    }
+    .social-link:hover {
+      background: #2f3545;
+    }
+
+    /* back to top */
+    .back2top {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      background: #7d5fff;
+      width: 44px;
+      height: 44px;
+      border-radius: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      opacity: 0;
+      transition: 0.2s;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      border: none;
+      color: white;
+      font-size: 1.4rem;
+      pointer-events: none;
+    }
+    .back2top.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .back2top:hover {
+      background: #5f3eff;
+      transform: scale(1.05);
+    }
+
+    @media (max-width: 800px) {
+      .navbar { flex-direction: column; align-items: stretch; }
+      .nav { justify-content: center; }
+      #search { width: 100%; }
+      .glass-card { padding: 20px; }
+      .faq-question { padding: 1rem; }
+    }
+  </style>
+</head>
+<body>
 
 <header class="navbar">
-  <a class="logo" href="index.html" style="text-decoration:none;">GAMEVAULT</a>
+  <a class="logo" href="index.html">GAMEVAULT</a>
   <nav class="nav">
     <a class="nav-link" href="index.html">Home</a>
-    <a class="nav-link" href="faq.html">FAQ / Tutorial</a>
+    <a class="nav-link" href="faq.html" style="background:#262c38;">FAQ / Tutorial</a>
     <div class="nav-dropdown">
-      <button class="nav-link nav-dropbtn" type="button">Category</button>
+      <button class="nav-link nav-dropbtn" type="button">Category </button>
       <div class="nav-dropdown-content">
         <a class="nav-link" href="#" data-category="Action">Action</a>
         <a class="nav-link" href="#" data-category="Adventure">Adventure</a>
@@ -30,55 +366,195 @@
       </div>
     </div>
   </nav>
-  <input type="text" id="search" placeholder="Search games...">
+  <input type="text" id="search" placeholder="Search FAQ...">
 </header>
 
-  <section class="games-section" style="padding-top:30px;">
-    <div class="section-title">
-      <h2>FAQ - Tutorial (How to Download)</h2>
-    </div>
+<section class="games-section">
+  <div class="section-title">
+    <h2>FAQ & Tutorial</h2>
+  </div>
 
-    <div class="download-box" style="position:static;">
-      <h3>Tutorial video</h3>
-      <div style="margin:10px 0 18px;">
-        <video controls style="width:100%; max-height:420px; background:#0b0d12; border-radius:12px;">
-          <source src="videos/tutorial.mp4" type="video/mp4" />
+  <div class="faq-grid">
+    <!-- Video tutorial card -->
+    <div class="glass-card">
+      <h3 style="margin-bottom: 8px;">Tutorial video</h3>
+      <div class="video-wrapper">
+        <video controls preload="metadata">
+          <source src="videos/tutorial.mp4" type="video/mp4">
           Your browser does not support the video tag.
         </video>
       </div>
+      <p style="margin-top: 12px; color:#9aa2b5; text-align: center;">Smaller step-by-step visual guide</p>
+    </div>
 
-      <h3>Step-by-step</h3>
-      <ol style="padding-left:18px; color:#b0b3bb; line-height:1.8;">
-        <li>Open the game page you want to download.</li>
-        <li>Click the <b>DOWNLOAD NOW</b> button.</li>
-        <li>If a page appears, wait a few seconds and follow the instructions.</li>
-        <li>Download the files, then run the installer/setup (if included).</li>
-        <li>After installation, open the game from your PC.</li>
+    <!-- Step-by-step card -->
+    <div class="glass-card">
+      <h3 style="margin-bottom: 16px;">How to download & install</h3>
+      <ol class="steps-list" style="list-style: none; counter-reset: step;">
+        <li style="counter-increment: step; margin-bottom: 12px;"><span class="badge-icon">STEP 1</span> Browse any game and click <b>DOWNLOAD NOW</b>.</li>
+        <li style="counter-increment: step; margin-bottom: 12px;"><span class="badge-icon">STEP 2</span> Wait a few seconds, skip any ads, and follow the link.</li>
+        <li style="counter-increment: step; margin-bottom: 12px;"><span class="badge-icon">STEP 3</span> Download the archive or installer.</li>
+        <li style="counter-increment: step; margin-bottom: 12px;"><span class="badge-icon">STEP 4</span> Extract files and run the setup.</li>
+        <li style="counter-increment: step;"><span class="badge-icon">PRO TIP</span> Always scan with antivirus and run as admin if necessary.</li>
       </ol>
-
-      <h3 style="margin-top:24px;">Common Questions</h3>
-      <ul style="list-style:none; margin-top:10px;">
-        <li style="margin-bottom:14px; color:#b0b3bb;">
-          <b>Why do I see ads or a timer?</b><br />Those are part of the download link protection.
-        </li>
-        <li style="margin-bottom:14px; color:#b0b3bb;">
-          <b>Is it safe?</b><br />Always scan downloaded files with your antivirus.
-        </li>
-        <li style="margin-bottom:14px; color:#b0b3bb;">
-          <b>Game won’t open?</b><br />Check requirements and run as administrator.
-        </li>
-      </ul>
     </div>
-  </section>
 
-  <footer class="footer">
-    <div class="footer-social">
-      <a class="social-link" href="https://www.facebook.com/profile.php?id=61590194378758" target="_blank" rel="noopener noreferrer" aria-label="Facebook">
-        <span class="social-icon social-icon-facebook" aria-hidden="true">f</span>
-      </a>
+    <!-- Recommended Adblocker Card -->
+    <div class="glass-card">
+      <h3>Recommended Adblocker</h3>
+      <p style="margin-top: 8px; color: #9aa2b5;">Enhance your browsing experience by blocking intrusive ads and pop-ups:</p>
+      <div style="margin-top: 16px; padding: 16px; background: #0b0d12; border-radius: 16px;">
+        <strong>AdBlocker Ultimate</strong>
+        <p style="margin: 8px 0; font-size: 13px;">Blocks YouTube, Facebook and all other ads. Improves browser speed and privacy.</p>
+        <a href="https://chromewebstore.google.com/detail/adblocker-ultimate/ohahllgiabjaoigichmmfljhkcfikeof" target="_blank" rel="noopener noreferrer" style="color: #7d5fff; text-decoration: none; font-weight: 500;">Install AdBlocker Ultimate →</a>
+      </div>
+      <p class="faq-stats" style="margin-top: 12px;">⭐ 4.8 | 63K+ ratings</p>
     </div>
-    <div>© Copyright 2026 All Rights Reserved</div>
-  </footer>
+
+    <!-- FAQ Accordion Section -->
+    <div class="glass-card">
+      <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 12px;">
+        <h3>Common questions</h3>
+        <div class="faq-stats" id="faqStats">7 answers</div>
+      </div>
+
+      <div id="faqContainer" class="faq-accordion">
+        <div class="faq-item" data-id="1">
+          <div class="faq-question">
+            <span>Why do I see ads or a timer before downloading?</span>
+            <span class="faq-icon">+</span>
+          </div>
+          <div class="faq-answer"><p>Those are short ad links that protect our file hosting. Wait a few seconds and click "Skip" or "Get link". It's normal for free platforms.</p></div>
+        </div>
+        <div class="faq-item" data-id="2">
+          <div class="faq-question">
+            <span>Is it safe to download games from GameVault?</span>
+            <span class="faq-icon">+</span>
+          </div>
+          <div class="faq-answer"><p>We recommend scanning every downloaded file with updated antivirus. Most releases are clean, but always be cautious.</p></div>
+        </div>
+        <div class="faq-item" data-id="3">
+          <div class="faq-question">
+            <span>Game won't open or crashes at launch</span>
+            <span class="faq-icon">+</span>
+          </div>
+          <div class="faq-answer"><p>Check system requirements, run as administrator, install DirectX and VC++ redistributables. Also verify antivirus hasn't quarantined files.</p></div>
+        </div>
+        <div class="faq-item" data-id="4">
+          <div class="faq-question">
+            <span>Download speed is very slow</span>
+            <span class="faq-icon">+</span>
+          </div>
+          <div class="faq-answer"><p>Free hosts have speed limits. Try using a download manager (IDM, jDownloader) or switch mirrors if available.</p></div>
+        </div>
+        <div class="faq-item" data-id="5">
+          <div class="faq-question">
+            <span>How to update games or install DLCs?</span>
+            <span class="faq-icon">+</span>
+          </div>
+          <div class="faq-answer"><p>Updates are posted on each game page. Download the update files and follow the included instructions (replace files or run patch).</p></div>
+        </div>
+        <div class="faq-item" data-id="6">
+          <div class="faq-question">
+            <span>Can I download games on mobile?</span>
+            <span class="faq-icon">+</span>
+          </div>
+          <div class="faq-answer"><p>GameVault focuses on PC games. Some indie titles may work via emulators, but we recommend desktop for best experience.</p></div>
+        </div>
+        <div class="faq-item" data-id="7">
+          <div class="faq-question">
+            <span>Download link broken / expired</span>
+            <span class="faq-icon">+</span>
+          </div>
+          <div class="faq-answer"><p>Please report via Facebook page or comments. We re-upload links within 48 hours. Provide game name and faulty link.</p></div>
+        </div>
+      </div>
+      <div id="noResultsMsg" style="display: none; text-align: center; padding: 1rem;">No matching questions found.</div>
+    </div>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="social-link">
+    <a href="https://www.facebook.com/profile.php?id=61590194378758" target="_blank" rel="noopener noreferrer" aria-label="Facebook" style="text-decoration:none; color:inherit;">
+      <span class="social-icon-facebook">f</span>
+    </a>
+  </div>
+  <div>© Copyright 2026 All Rights Reserved</div>
+</footer>
+
+<button class="back2top" id="backToTopBtn">↑</button>
+
+<script>
+  (function() {
+    // Accordion logic
+    const faqItems = document.querySelectorAll('.faq-item');
+    function initAccordion() {
+      faqItems.forEach(item => {
+        const q = item.querySelector('.faq-question');
+        if (q) {
+          q.removeEventListener('click', handleClick);
+          q.addEventListener('click', handleClick);
+        }
+      });
+    }
+    function handleClick(e) {
+      const current = e.currentTarget.closest('.faq-item');
+      if (!current) return;
+      const isActive = current.classList.contains('active');
+      faqItems.forEach(item => item.classList.remove('active'));
+      if (!isActive) current.classList.add('active');
+    }
+    if (faqItems.length) faqItems[0].classList.add('active');
+    initAccordion();
+
+    // Search filter
+    const searchInput = document.getElementById('search');
+    const faqContainer = document.getElementById('faqContainer');
+    const noResults = document.getElementById('noResultsMsg');
+    const statsSpan = document.getElementById('faqStats');
+    function filterFaqs() {
+      const term = searchInput.value.trim().toLowerCase();
+      let visible = 0;
+      const all = document.querySelectorAll('.faq-item');
+      all.forEach(item => {
+        const question = item.querySelector('.faq-question span:first-child')?.innerText.toLowerCase() || '';
+        const answer = item.querySelector('.faq-answer')?.innerText.toLowerCase() || '';
+        const match = term === '' || question.includes(term) || answer.includes(term);
+        item.style.display = match ? '' : 'none';
+        if (match) visible++;
+        if (!match && item.classList.contains('active')) item.classList.remove('active');
+      });
+      statsSpan.innerText = `${visible} of ${all.length} answers`;
+      noResults.style.display = (visible === 0 && term !== '') ? 'block' : 'none';
+      if (visible > 0 && !document.querySelector('.faq-item.active')) {
+        const firstVisible = Array.from(all).find(i => i.style.display !== 'none');
+        if (firstVisible) firstVisible.classList.add('active');
+      }
+    }
+    let debounce;
+    searchInput.addEventListener('input', () => {
+      clearTimeout(debounce);
+      debounce = setTimeout(filterFaqs, 250);
+    });
+    filterFaqs();
+
+    // Back to top
+    const backBtn = document.getElementById('backToTopBtn');
+    window.addEventListener('scroll', () => {
+      if (window.scrollY > 400) backBtn.classList.add('visible');
+      else backBtn.classList.remove('visible');
+    });
+    backBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+
+    // Category dropdown placeholder
+    document.querySelectorAll('.nav-dropdown-content a').forEach(link => {
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        console.log('Navigate to category:', link.getAttribute('data-category'));
+      });
+    });
+  })();
+</script>
 </body>
 </html>
-
