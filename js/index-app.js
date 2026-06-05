@@ -455,7 +455,6 @@
       { id: 457, name: "Tactical Breach Wizards", category: "Strategy", thumb: null, downloadUrl: "#", desc: "Tactical wizard squad" },
       { id: 458, name: "Teardown", category: "Action", thumb: null, downloadUrl: "#", desc: "Voxel destruction heist" },
       { id: 459, name: "Teenage Mutant Ninja Turtles: Shredder's Revenge", category: "Action", thumb: null, downloadUrl: "#", desc: "TMNT beat-em-up" },
-      { id: 460, name: "TEKKEN 8", category: "Fighting", thumb: null, downloadUrl: "#", desc: "Latest Tekken" },
       { id: 461, name: "Tempest Rising", category: "Strategy", thumb: null, downloadUrl: "#", desc: "Classic RTS revival" },
       { id: 462, name: "Terraria (v1.4.5)", category: "Indie", thumb: null, downloadUrl: "#", desc: "Latest Terraria update" },
       { id: 463, name: "Test Drive Unlimited Solar Crown", category: "Racing", thumb: null, downloadUrl: "#", desc: "Open world racer" },
