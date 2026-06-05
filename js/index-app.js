@@ -356,7 +356,7 @@
       { id: 352, name: "Manor Lords", category: "Strategy", thumb: null, downloadUrl: "#", desc: "Medieval settlement" },
       { id: 353, name: "MARVEL Cosmic Invasion", category: "Action", thumb: null, downloadUrl: "#", desc: "Marvel brawler" },
       { id: 354, name: "Marvel's Guardians of the Galaxy", category: "Action", thumb: null, downloadUrl: "#", desc: "Galaxy squad game" },
-      { id: 355, name: "Marvel's Spider-Man: Miles Morales", category: "Action", thumb: null, downloadUrl: "#", desc: "Miles web-swings" },
+      { id: 355, name: "Marvel's Spider-Man: Miles Morales", category: "Action", thumb: https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ7_jVCPuoVqVVYyTxvbBafBZwunx1jYd8_ghIbivt2BkbHhGGD6I2sc9fjMQq8ZAMsWGKsVQ&s=10, downloadUrl: "https://bzzhr.to/67pt5szrjk0h", desc: "Miles web-swings" },
       { id: 356, name: "Max Payne 3", category: "Shooter", thumb: null, downloadUrl: "#", desc: "Bullet time thriller" },
       { id: 357, name: "Medieval Dynasty", category: "Simulation", thumb: null, downloadUrl: "#", desc: "Medieval life sim" },
       { id: 358, name: "METAL GEAR SOLID Δ: SNAKE EATER", category: "Action", thumb: null, downloadUrl: "#", desc: "Snake Eater remake" },
