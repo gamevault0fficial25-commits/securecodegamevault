@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-Frame-Options" content="DENY">
+  <meta http-equiv="X-Content-Type-Options" content="nosniff">
+  <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
+  <title>GameVault — Get Access</title>
+  <link rel="icon" type="image/jpg" href="images/Logo.jpg" />
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-0:#060810;--bg-1:#0c0f1a;--bg-2:#111526;--bg-3:#161b30;
+      --border:#1e2540;--border-bright:#2e3660;
+      --accent:#6c63ff;--accent-2:#ff6b9d;--accent-3:#00d4aa;
+      --accent-warn:#ffb347;--accent-danger:#ff4d6d;
+      --text-0:#ffffff;--text-1:#c8d0e8;--text-2:#8892b0;--text-3:#4a5270;
+      --font-display:'Rajdhani',sans-serif;--font-body:'Inter',sans-serif;--font-mono:'JetBrains Mono',monospace;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    body{background:var(--bg-0);color:var(--text-1);font-family:var(--font-body);min-height:100vh;}
+    body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 60% 40% at 20% 10%,rgba(108,99,255,.08) 0%,transparent 60%),radial-gradient(ellipse 40% 30% at 80% 80%,rgba(255,107,157,.06) 0%,transparent 60%);pointer-events:none;z-index:0;}
+    .page-wrap{position:relative;z-index:1;max-width:1000px;margin:0 auto;padding:48px 24px;}
+    .header{text-align:center;margin-bottom:52px;}
+    .wordmark{font-family:var(--font-display);font-size:36px;font-weight:700;letter-spacing:4px;background:linear-gradient(135deg,var(--accent),var(--accent-2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:8px;}
+    .tagline{color:var(--text-3);font-size:14px;letter-spacing:1px;}
+
+    /* Steps */
+    .steps{display:flex;align-items:center;justify-content:center;gap:0;margin-bottom:48px;flex-wrap:wrap;}
+    .step{display:flex;align-items:center;gap:8px;font-size:12px;letter-spacing:1px;text-transform:uppercase;color:var(--text-3);}
+    .step.active{color:var(--text-1);}.step.done{color:var(--accent-3);}
+    .step-dot{width:28px;height:28px;border-radius:50%;border:1px solid var(--border-bright);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;}
+    .step.active .step-dot{background:var(--accent);border-color:var(--accent);color:white;}
+    .step.done .step-dot{background:rgba(0,212,170,.15);border-color:var(--accent-3);color:var(--accent-3);}
+    .step-line{width:48px;height:1px;background:var(--border);margin:0 4px;}
+
+    /* Sections */
+    .section{display:none;}.section.active{display:block;}
+
+    /* Plan Cards */
+    .plans-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:20px;margin-bottom:32px;}
+    .plan-card{background:var(--bg-2);border:2px solid var(--border);border-radius:16px;padding:24px 20px;cursor:pointer;transition:all .2s;position:relative;}
+    .plan-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--card-accent,var(--border));}
+    .plan-card:hover,.plan-card.selected{border-color:var(--accent);box-shadow:0 0 0 4px rgba(108,99,255,.1),0 8px 32px rgba(0,0,0,.3);}
+    .plan-card.selected::before{background:var(--accent);}
+    .plan-badge{display:inline-block;font-size:10px;padding:3px 10px;border-radius:20px;letter-spacing:1px;margin-bottom:14px;}
+    .plan-name{font-family:var(--font-display);font-size:22px;font-weight:700;color:var(--text-0);margin-bottom:6px;}
+    .plan-price{font-size:28px;font-weight:700;font-family:var(--font-display);color:var(--accent-warn);margin-bottom:4px;}
+    .plan-duration{font-size:12px;color:var(--text-3);margin-bottom:20px;}
+    .plan-features{list-style:none;}
+    .plan-features li{font-size:12px;color:var(--text-2);padding:5px 0;border-bottom:1px solid var(--border);}
+    .plan-features li:last-child{border-bottom:none;}
+    .plan-features li::before{content:"✓ ";color:var(--accent-3);}
+    .popular-tag{position:absolute;top:12px;right:12px;background:var(--accent-2);color:white;font-size:9px;padding:3px 8px;border-radius:20px;}
+
+    /* Form */
+    .form-box{background:var(--bg-2);border:1px solid var(--border-bright);border-radius:16px;padding:32px;max-width:480px;margin:0 auto;}
+    .form-title{font-family:var(--font-display);font-size:20px;font-weight:700;color:var(--text-0);margin-bottom:6px;}
+    .form-sub{color:var(--text-3);font-size:13px;margin-bottom:24px;}
+    .f-group{margin-bottom:16px;}
+    .f-group label{display:block;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-3);margin-bottom:8px;}
+    .f-group input{width:100%;background:var(--bg-1);border:1px solid var(--border);border-radius:10px;padding:12px 16px;color:var(--text-0);font-size:14px;outline:none;font-family:var(--font-body);}
+    .f-group input:focus{border-color:var(--accent);}
+    .f-group input.mono{font-family:var(--font-mono);letter-spacing:2px;}
+    .selected-summary{background:rgba(108,99,255,.08);border:1px solid rgba(108,99,255,.2);border-radius:10px;padding:14px 16px;margin-bottom:20px;font-size:13px;}
+    .btn-cta{width:100%;background:linear-gradient(135deg,var(--accent),#4f46e5);border:none;border-radius:10px;padding:14px;color:white;font-family:var(--font-display);font-size:18px;font-weight:700;letter-spacing:2px;cursor:pointer;transition:opacity .2s;}
+    .btn-cta:hover{opacity:.9;}.btn-cta:disabled{opacity:.5;cursor:not-allowed;}
+    .btn-back{background:none;border:none;color:var(--text-3);font-size:13px;cursor:pointer;margin-top:14px;width:100%;text-align:center;}
+    .btn-back:hover{color:var(--text-1);}
+
+    /* Payment */
+    .payment-box{background:var(--bg-2);border:1px solid var(--border-bright);border-radius:16px;padding:32px;max-width:480px;margin:0 auto;text-align:center;}
+    .qr-frame{width:200px;height:200px;margin:0 auto 20px;border-radius:16px;overflow:hidden;border:2px solid var(--border-bright);background:white;display:flex;align-items:center;justify-content:center;}
+    .qr-frame img{width:100%;height:100%;object-fit:contain;}
+    .payment-amount{font-family:var(--font-display);font-size:42px;font-weight:700;color:var(--accent-warn);margin-bottom:4px;}
+    .payment-to{font-size:14px;color:var(--text-2);margin-bottom:24px;}
+    .txn-info{background:var(--bg-1);border-radius:10px;padding:14px 16px;margin-bottom:20px;text-align:left;}
+    .txn-row{display:flex;justify-content:space-between;font-size:12px;padding:4px 0;color:var(--text-2);}
+    .txn-row span:last-child{color:var(--text-0);font-family:var(--font-mono);}
+
+    /* Waiting screen */
+    .waiting-box{background:var(--bg-2);border:1px solid var(--border-bright);border-radius:16px;padding:48px 32px;max-width:480px;margin:0 auto;text-align:center;}
+    .pulse-ring{width:80px;height:80px;border-radius:50%;border:3px solid var(--accent-warn);border-top-color:transparent;animation:spin .9s linear infinite;margin:0 auto 24px;}
+    @keyframes spin{to{transform:rotate(360deg);}}
+
+    /* Success */
+    .success-box{background:var(--bg-2);border:1px solid rgba(0,212,170,.3);border-radius:16px;padding:48px 32px;max-width:480px;margin:0 auto;text-align:center;}
+    .success-icon{width:72px;height:72px;border-radius:50%;background:rgba(0,212,170,.15);border:2px solid var(--accent-3);display:flex;align-items:center;justify-content:center;font-size:32px;margin:0 auto 24px;}
+    .code-display{background:var(--bg-1);border:2px dashed var(--accent);border-radius:12px;padding:20px;margin:24px 0;}
+    .code-val{font-family:var(--font-mono);font-size:26px;font-weight:600;color:var(--text-0);letter-spacing:3px;}
+    .spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.2);border-top-color:white;border-radius:50%;animation:spin .6s linear infinite;}
+
+    /* Info box */
+    .info-box{background:rgba(108,99,255,.06);border:1px solid rgba(108,99,255,.2);border-radius:10px;padding:14px 16px;font-size:12px;color:var(--text-2);text-align:left;margin-bottom:16px;line-height:1.6;}
+    .info-box strong{color:var(--text-1);}
+
+    .err-msg{background:rgba(255,77,109,.08);border:1px solid rgba(255,77,109,.25);border-radius:10px;padding:12px 16px;color:#ff8a9d;font-size:13px;margin-top:12px;display:none;}
+    .err-msg.show{display:block;}
+
+    @media(max-width:800px){.plans-grid{grid-template-columns:repeat(2,1fr);}}
+    @media(max-width:600px){.page-wrap{padding:24px 16px;}.plans-grid{grid-template-columns:1fr;}.steps{gap:8px;}.step-line{width:24px;}}
+  </style>
+</head>
+<body>
+<div class="page-wrap">
+  <div class="header">
+    <div class="wordmark">GAMEVAULT</div>
+    <div class="tagline">Get instant access — pay with GCash</div>
+  </div>
+
+  <div class="steps">
+    <div class="step active" id="step1"><div class="step-dot">1</div>Choose Plan</div>
+    <div class="step-line"></div>
+    <div class="step" id="step2"><div class="step-dot">2</div>Your Details</div>
+    <div class="step-line"></div>
+    <div class="step" id="step3"><div class="step-dot">3</div>Pay via GCash</div>
+    <div class="step-line"></div>
+    <div class="step" id="step4"><div class="step-dot">4</div>Done</div>
+  </div>
+
+  <!-- STEP 1: Plans -->
+  <div class="section active" id="sec-plans">
+    <div class="plans-grid">
+      <div class="plan-card" data-plan="3 Days" data-price="39" data-days="3" style="--card-accent:var(--accent);">
+        <div class="plan-badge" style="background:rgba(108,99,255,.12);color:var(--accent);border:1px solid rgba(108,99,255,.3);">Starter</div>
+        <div class="plan-name">3 Days Access</div>
+        <div class="plan-price">₱39</div>
+        <div class="plan-duration">3 days full access</div>
+        <ul class="plan-features"><li>Full access</li><li>Instant activation</li><li>All downloads</li></ul>
+      </div>
+      <div class="plan-card" data-plan="7 Days" data-price="59" data-days="7" style="--card-accent:var(--accent-2);">
+        <div class="plan-badge" style="background:rgba(255,107,157,.12);color:var(--accent-2);border:1px solid rgba(255,107,157,.3);">Popular</div>
+        <div class="plan-name">7 Days Access</div>
+        <div class="plan-price">₱59</div>
+        <div class="plan-duration">7 days full access</div>
+        <ul class="plan-features"><li>Full access</li><li>All downloads</li><li>Fast activation</li></ul>
+      </div>
+      <div class="plan-card" data-plan="20 Days" data-price="69" data-days="20" style="--card-accent:var(--accent-3);">
+        <div class="plan-badge" style="background:rgba(0,212,170,.12);color:var(--accent-3);border:1px solid rgba(0,212,170,.3);">Best Value</div>
+        <div class="plan-name">20 Days Access</div>
+        <div class="plan-price">₱69</div>
+        <div class="plan-duration">20 days full access</div>
+        <ul class="plan-features"><li>Full access</li><li>All downloads</li><li>Priority support</li></ul>
+      </div>
+      <div class="plan-card" data-plan="Unlimited" data-price="99" data-days="1825" style="--card-accent:var(--accent-warn);">
+        <div class="popular-tag">MOST POPULAR</div>
+        <div class="plan-badge" style="background:rgba(255,179,71,.12);color:var(--accent-warn);border:1px solid rgba(255,179,71,.3);">Ultimate</div>
+        <div class="plan-name">Unlimited Access</div>
+        <div class="plan-price">₱99</div>
+        <div class="plan-duration">Lifetime access</div>
+        <ul class="plan-features"><li>Lifetime access</li><li>All games unlocked</li><li>Unlimited downloads</li><li>VIP support</li></ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 2: Email -->
+  <div class="section" id="sec-email">
+    <div class="form-box">
+      <div class="form-title">Where to send your code?</div>
+      <div class="form-sub">Your activation code will be emailed automatically once your payment is verified.</div>
+      <div class="selected-summary" id="planSummary">—</div>
+      <div class="f-group">
+        <label>Email Address</label>
+        <input type="email" id="customerEmail" placeholder="your@email.com" autocomplete="email">
+      </div>
+      <div class="err-msg" id="emailErr"></div>
+      <button class="btn-cta" id="proceedToPayBtn">PROCEED TO PAYMENT →</button>
+      <button class="btn-back" onclick="goTo(1)">← Back to plans</button>
+    </div>
+  </div>
+
+  <!-- STEP 3: QR + Reference Number -->
+  <div class="section" id="sec-payment">
+    <div class="payment-box">
+      <div style="font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--text-3);margin-bottom:16px;">Scan & Pay via GCash</div>
+      <div class="payment-amount" id="payAmount">₱0</div>
+      <div class="payment-to">To: <strong>GameVault GCash Account</strong></div>
+      <div class="qr-frame">
+        <img id="gcashQr" src="images/gcash-qr.jpg" alt="GCash QR" onerror="this.src='https://placehold.co/200x200?text=GCash+QR';">
+      </div>
+
+      <div class="info-box">
+        <strong>How to pay:</strong><br>
+        1. Open GCash → Scan QR or Send Money<br>
+        2. Send the <strong>exact amount</strong> shown above<br>
+        3. Copy the <strong>13-digit Reference Number</strong> from your GCash receipt<br>
+        4. Paste it below and submit — we'll verify and send your code
+      </div>
+
+      <div class="txn-info">
+        <div class="txn-row"><span>Plan</span><span id="dispPlan">—</span></div>
+        <div class="txn-row"><span>Amount</span><span id="dispAmount">—</span></div>
+        <div class="txn-row"><span>Email</span><span id="dispEmail">—</span></div>
+      </div>
+
+      <div class="f-group" style="text-align:left;">
+        <label>GCash Reference Number</label>
+        <input type="text" id="gcashRef" class="mono" placeholder="e.g. 1234567890123" maxlength="20" autocomplete="off">
+        <div style="font-size:11px;color:var(--text-3);margin-top:6px;">Found in your GCash transaction history. Usually 13 digits.</div>
+      </div>
+
+      <div class="err-msg" id="refErr"></div>
+      <button id="submitOrderBtn" class="btn-cta" style="margin-top:8px;">SUBMIT PAYMENT →</button>
+      <button class="btn-back" onclick="goTo(2)">← Change email</button>
+    </div>
+  </div>
+
+  <!-- STEP 4: Waiting for admin approval -->
+  <div class="section" id="sec-waiting">
+    <div class="waiting-box">
+      <div class="pulse-ring"></div>
+      <h2 style="font-family:var(--font-display);font-size:26px;color:var(--text-0);margin-bottom:12px;">Payment Submitted!</h2>
+      <p style="color:var(--text-2);margin-bottom:20px;">We're verifying your GCash payment. Your access code will be sent to:</p>
+      <div style="font-size:18px;font-weight:700;color:var(--accent-warn);margin-bottom:20px;" id="waitingEmail">—</div>
+      <div class="info-box">
+        ⏱ Verification usually takes <strong>1–10 minutes</strong>.<br>
+        This page will <strong>automatically update</strong> once approved — no need to refresh.<br>
+        Check your spam folder if the email doesn't arrive.
+      </div>
+      <div style="font-size:12px;color:var(--text-3);">Reference: <span id="waitingRef" style="font-family:var(--font-mono);"></span></div>
+    </div>
+  </div>
+
+  <!-- STEP 5: Success (auto-triggered) -->
+  <div class="section" id="sec-success">
+    <div class="success-box">
+      <div class="success-icon">✔</div>
+      <h2 style="font-family:var(--font-display);font-size:26px;color:var(--text-0);margin-bottom:8px;">Payment Verified!</h2>
+      <p>Your activation code has been sent to your email.</p>
+      <div class="code-display" id="successCodeDisplay" style="display:none;">
+        <div style="font-size:11px;color:var(--text-3);letter-spacing:2px;margin-bottom:8px;">YOUR ACTIVATION CODE</div>
+        <div class="code-val" id="successCode">—</div>
+        <button onclick="copyCode()" style="margin-top:12px;background:rgba(108,99,255,.15);border:1px solid rgba(108,99,255,.3);color:var(--accent);border-radius:8px;padding:6px 18px;font-size:12px;cursor:pointer;">Copy Code</button>
+      </div>
+      <p style="font-size:12px;color:var(--text-3);margin-top:16px;">Check your inbox (and spam folder).<br>Use this code in the GameVault login page.</p>
+      <a href="index.html" style="display:inline-block;margin-top:24px;background:var(--accent);color:white;padding:12px 32px;border-radius:10px;text-decoration:none;font-family:var(--font-display);font-size:16px;font-weight:700;letter-spacing:2px;">GO TO GAMEVAULT →</a>
+    </div>
+  </div>
+</div>
+
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js" crossorigin="anonymous"></script>
+<script type="module">
+  import { initializeApp }  from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+  import {
+    getFirestore, doc, setDoc, getDoc, onSnapshot, Timestamp, serverTimestamp, collection, query, where, getDocs
+  } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+  // ══════════════════════════════════════════
+  //  YOUR EMAILJS CREDENTIALS
+  // ══════════════════════════════════════════
+  const EMAILJS_PUBLIC_KEY  = 'aKf8thsk8p6FNFzVw';
+  const EMAILJS_SERVICE_ID  = 'service_v5br03m';
+  const EMAILJS_TEMPLATE_ID = 'template_u0ixb39';
+  // ══════════════════════════════════════════
+
+  // Server-side price map — client cannot alter these values
+  const PLAN_CATALOG = {
+    '3 Days':    { price: 39,  days: 3    },
+    '7 Days':    { price: 59,  days: 7    },
+    '20 Days':   { price: 69,  days: 20   },
+    'Unlimited': { price: 99,  days: 1825 }
+  };
+
+  const firebaseConfig = {
+    apiKey: 'AIzaSyCMKY0LTMwcVW__SkhxGBz3rcvjvWjUGtU',
+    authDomain: 'gamevault-380f7.firebaseapp.com',
+    projectId: 'gamevault-380f7',
+    storageBucket: 'gamevault-380f7.firebasestorage.app',
+    messagingSenderId: '533825597908',
+    appId: '1:533825597908:web:598d526a9dc4c6ea6de641'
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db  = getFirestore(app);
+  window.emailjs.init(EMAILJS_PUBLIC_KEY);
+
+  // Flow state — step progression enforced, never trust DOM values alone
+  let flowStep = 1;          // 1=plans, 2=email, 3=payment, 4=waiting, 5=success
+  let selectedPlanKey = '';  // must be a key in PLAN_CATALOG
+  let selectedEmail = '';
+  let orderId = '';
+  let orderUnsub = null;
+  let orderSubmitted = false;
+
+  function showErr(id, msg) {
+    const el = document.getElementById(id);
+    el.textContent = msg; el.classList.add('show');
+  }
+  function hideErr(id) { document.getElementById(id).classList.remove('show'); }
+
+  /* ── Secure navigation: only allow forward steps in sequence ── */
+  const SECTIONS = ['plans','email','payment','waiting','success'];
+  function goTo(num) {
+    // Block skipping steps forward — must go in order
+    if (num > flowStep + 1 && num > 2) return;
+    // Block going back once order is submitted
+    if (orderSubmitted && num < 4) return;
+    flowStep = num;
+    SECTIONS.forEach((s, i) => {
+      document.getElementById(`sec-${s}`)?.classList.toggle('active', i + 1 === num);
+    });
+    for (let i = 1; i <= 4; i++) {
+      const el = document.getElementById(`step${i}`);
+      if (!el) continue;
+      el.classList.remove('active','done');
+      const stepNum = num > 4 ? 5 : num;
+      if (i < stepNum) el.classList.add('done');
+      else if (i === stepNum) el.classList.add('active');
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  window.goTo = goTo;
+
+  // Block browser back button after submission
+  history.pushState(null, '', location.href);
+  window.addEventListener('popstate', () => {
+    history.pushState(null, '', location.href);
+    if (orderSubmitted) return; // already locked
+    if (flowStep > 1) goTo(flowStep - 1);
+  });
+
+  /* ── Step 1: plan select ── */
+  document.querySelectorAll('.plan-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const planKey = card.dataset.plan;
+      if (!PLAN_CATALOG[planKey]) return; // reject unknown plans
+      document.querySelectorAll('.plan-card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+      selectedPlanKey = planKey;
+      const { price, days } = PLAN_CATALOG[planKey];
+      const dur = days === 1825 ? 'Lifetime' : days + ' days';
+      document.getElementById('planSummary').innerHTML =
+        `<strong style="color:var(--text-0);">${planKey}</strong> — <span style="color:var(--accent-warn);">₱${price}</span> · ${dur}`;
+      goTo(2);
+    });
+  });
+
+  /* ── Step 2: email ── */
+  document.getElementById('proceedToPayBtn').addEventListener('click', () => {
+    if (!PLAN_CATALOG[selectedPlanKey]) { goTo(1); return; } // guard
+    const email = document.getElementById('customerEmail').value.trim();
+    hideErr('emailErr');
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      showErr('emailErr', 'Please enter a valid email address.'); return;
+    }
+    selectedEmail = email;
+    const { price } = PLAN_CATALOG[selectedPlanKey];
+    document.getElementById('payAmount').textContent = `₱${price}`;
+    document.getElementById('dispPlan').textContent   = selectedPlanKey;
+    document.getElementById('dispAmount').textContent = `₱${price}`;
+    document.getElementById('dispEmail').textContent  = selectedEmail;
+    goTo(3);
+  });
+
+  /* ── Step 3: submit order ── */
+  document.getElementById('submitOrderBtn').addEventListener('click', async () => {
+    if (orderSubmitted) return; // prevent double-submit
+    if (!PLAN_CATALOG[selectedPlanKey] || !selectedEmail) { goTo(1); return; } // guard
+
+    const ref = document.getElementById('gcashRef').value.trim().replace(/\s+/g,'');
+    hideErr('refErr');
+    if (!ref || ref.length < 8) {
+      showErr('refErr', 'Please enter your GCash reference number (min 8 digits).'); return;
+    }
+    if (!/^\d+$/.test(ref)) {
+      showErr('refErr', 'Reference number must contain digits only.'); return;
+    }
+
+    const btn = document.getElementById('submitOrderBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Submitting…';
+
+    try {
+      // Check for duplicate GCash ref
+      const dupSnap = await getDocs(query(collection(db, 'orders'), where('gcashRef', '==', ref)));
+      if (!dupSnap.empty) {
+        showErr('refErr', 'This reference number was already submitted. Contact support if this is an error.');
+        btn.disabled = false; btn.innerHTML = 'SUBMIT PAYMENT →';
+        return;
+      }
+
+      // Use server-enforced price/days — never from DOM or user input
+      const { price, days } = PLAN_CATALOG[selectedPlanKey];
+
+      orderId = 'ORD-' + Date.now() + '-' + Math.random().toString(36).slice(2,6).toUpperCase();
+      await setDoc(doc(db, 'orders', orderId), {
+        orderId,
+        plan:        selectedPlanKey,
+        price,           // locked server-side from PLAN_CATALOG
+        days,            // locked server-side from PLAN_CATALOG
+        email:       selectedEmail,
+        gcashRef:    ref,
+        status:      'pending',
+        created_at:  serverTimestamp(),
+        approved_at: null,
+        code:        null
+      });
+
+      orderSubmitted = true;
+      document.getElementById('waitingEmail').textContent = selectedEmail;
+      document.getElementById('waitingRef').textContent   = ref;
+      goTo(4);
+      startOrderListener(orderId);
+
+    } catch (err) {
+      showErr('refErr', 'Failed to submit: ' + err.message);
+      btn.disabled = false; btn.innerHTML = 'SUBMIT PAYMENT →';
+    }
+  });
+
+  /* ── Real-time listener: fires when admin approves/rejects ── */
+  function startOrderListener(oid) {
+    if (orderUnsub) orderUnsub();
+    orderUnsub = onSnapshot(doc(db, 'orders', oid), async snap => {
+      if (!snap.exists()) return;
+      const data = snap.data();
+
+      if (data.status === 'approved' && data.code) {
+        if (orderUnsub) { orderUnsub(); orderUnsub = null; }
+
+        // Show code on screen
+        document.getElementById('successCode').textContent = data.code;
+        document.getElementById('successCodeDisplay').style.display = 'block';
+        goTo(5);
+
+        // Auto-send email
+        const expiry = data.days === 1825
+          ? 'Lifetime (Never expires)'
+          : new Date(Date.now() + data.days * 86400000).toLocaleDateString('en-PH', { year:'numeric', month:'long', day:'numeric' });
+        try {
+          await window.emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+            to_email: data.email,
+            to_name:  data.email.split('@')[0],
+            code:     data.code,
+            plan:     data.plan,
+            expiry
+          });
+        } catch(e) {
+          console.error('Email send failed:', e);
+          // Show email error on success screen without hiding the code
+          const box = document.getElementById('successCodeDisplay');
+          const errNote = document.createElement('p');
+          errNote.style.cssText = 'color:#ff8a9d;font-size:12px;margin-top:8px;';
+          errNote.textContent = '⚠ Email delivery failed — copy your code above manually.';
+          box.appendChild(errNote);
+        }
+      }
+
+      if (data.status === 'rejected') {
+        if (orderUnsub) { orderUnsub(); orderUnsub = null; }
+        document.querySelector('.waiting-box').innerHTML = `
+          <div style="font-size:48px;margin-bottom:16px;">❌</div>
+          <h2 style="font-family:var(--font-display);font-size:24px;color:#ff4d6d;margin-bottom:12px;">Payment Not Verified</h2>
+          <p style="color:var(--text-2);margin-bottom:20px;">Your GCash reference number could not be verified.<br>Please contact support on Facebook.</p>
+          <a href="index.html" style="color:var(--accent);font-size:13px;">← Back to GameVault</a>`;
+      }
+    });
+  }
+
+  window.copyCode = () => {
+    const code = document.getElementById('successCode').textContent;
+    navigator.clipboard.writeText(code).then(() => alert('Code copied!'));
+  };
+</script>
+</body>
+</html>
