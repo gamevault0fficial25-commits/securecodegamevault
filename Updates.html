@@ -327,7 +327,7 @@
   import { getFirestore, collection, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
   const firebaseConfig = {
-    apiKey: 'AIzaSyCMKY0LTMwcVW__SkhxGBz3rcvjvWjUGtU',
+    apiKey: 'AIzaSyCMKY0LTMwcVW__SkhxGBz3rcvjvWJUGtU',
     authDomain: 'gamevault-380f7.firebaseapp.com',
     projectId: 'gamevault-380f7',
     storageBucket: 'gamevault-380f7.firebasestorage.app',
@@ -335,27 +335,36 @@
     appId: '1:533825597908:web:598d526a9dc4c6ea6de641'
   };
 
-  const app = initializeApp(firebaseConfig);
-  const db  = getFirestore(app);
+  let app, db;
+  try {
+    app = initializeApp(firebaseConfig);
+    db = getFirestore(app);
+  } catch (e) {
+    console.warn("Firebase init error", e);
+    db = null;
+  }
 
-  /* ── helpers ── */
   function todayISO() {
     const d = new Date();
-    return d.getFullYear() + '-' +
-      ('0'+(d.getMonth()+1)).slice(-2) + '-' +
-      ('0'+d.getDate()).slice(-2);
+    return d.getFullYear() + '-' + ('0'+(d.getMonth()+1)).slice(-2) + '-' + ('0'+d.getDate()).slice(-2);
   }
 
   function tsToISO(ts) {
     if (!ts) return null;
-    const d = ts.toDate ? ts.toDate() : new Date(ts);
-    return d.getFullYear() + '-' +
-      ('0'+(d.getMonth()+1)).slice(-2) + '-' +
-      ('0'+d.getDate()).slice(-2);
+    try {
+      if (typeof ts?.toDate === 'function') return ts.toDate().toISOString().slice(0,10);
+      if (ts instanceof Date) return ts.toISOString().slice(0,10);
+      if (typeof ts === 'string') return ts.slice(0,10);
+      if (typeof ts === 'number') return new Date(ts).toISOString().slice(0,10);
+    } catch (_) {}
+    return null;
   }
 
   function dateLabel(iso) {
-    return new Date(iso).toLocaleDateString('en-US', { month:'long', day:'numeric', year:'numeric' });
+    if (!iso) return 'Unknown';
+    try {
+      return new Date(iso).toLocaleDateString('en-US', { month:'long', day:'numeric', year:'numeric' });
+    } catch { return iso; }
   }
 
   function relLabel(iso, today) {
@@ -369,11 +378,19 @@
   }
 
   function esc(s) {
-    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    if (s === undefined || s === null) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function isValidThumb(url) {
+    if (!url || typeof url !== 'string') return false;
+    const trimmed = url.trim();
+    if (trimmed === '' || trimmed === 'null' || trimmed === '#') return false;
+    return trimmed.startsWith('http://') || trimmed.startsWith('https://');
   }
 
   function cardHtml(g) {
-    const hasThumb = g.thumb && g.thumb !== 'null' && g.thumb !== '#' && g.thumb !== null;
+    const hasThumb = isValidThumb(g.thumb);
     const thumbHtml = hasThumb
       ? `<img src="${esc(g.thumb)}" alt="${esc(g.name)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="no-img" style="display:none">🎮</div>`
       : '<div class="no-img">🎮</div>';
@@ -381,8 +398,8 @@
     return `<div class="update-card">
       <div class="update-thumb">${thumbHtml}</div>
       <div class="update-info">
-        <span class="update-category">${esc(g.category)}</span>
-        <h3>${esc(g.name)}</h3>
+        <span class="update-category">${esc(g.category || 'Game')}</span>
+        <h3>${esc(g.name || 'Untitled')}</h3>
       </div>
       ${dlDisabled
         ? '<span class="dl-btn" style="opacity:.4;cursor:default;background:var(--bg5)">Coming Soon</span>'
@@ -395,63 +412,57 @@
     const container = document.getElementById('updatesContainer');
     const TODAY = todayISO();
 
-    if (!allGames.length) {
+    if (!allGames || !allGames.length) {
       container.innerHTML = '<div class="empty-state">No games yet.</div>';
       document.getElementById('pageSubtext').textContent = '0 games';
+      document.getElementById('statsRow').innerHTML = `<div class="stat-chip"><strong>0</strong>Total Games</div><div class="stat-chip"><strong>0</strong>Dashboard Added</div><div class="stat-chip"><strong>0</strong>Update Days</div>`;
       return;
     }
 
-    /* deduplicate by name */
     const seen = new Set();
     const unique = allGames.filter(g => {
       const k = g.name?.toLowerCase();
       if (seen.has(k)) return false;
-      seen.add(k); return true;
+      seen.add(k);
+      return true;
     });
 
-    /* group by date:
-       - Firestore games with created_at  → use that date (admin-added = real update)
-       - Catalog games with addedDate     → use addedDate
-       - Everything else                  → group into "Catalog" bucket (not today)
-    */
     const CATALOG_KEY = 'catalog';
     const groups = {};
 
     unique.forEach(g => {
-      let dateKey;
-      if (g._source === 'firestore' && g.created_at) {
-        dateKey = tsToISO(g.created_at) || TODAY;
+      let dateKey = CATALOG_KEY;
+      const fromFirestore = g._source === 'firestore';
+      let addedTimestamp = null;
+      if (fromFirestore && (g.createdAt || g.created_at)) {
+        addedTimestamp = tsToISO(g.createdAt || g.created_at);
+        if (addedTimestamp) dateKey = addedTimestamp;
       } else if (g.addedDate && /^\d{4}-\d{2}-\d{2}$/.test(g.addedDate)) {
         dateKey = g.addedDate;
-      } else {
-        dateKey = CATALOG_KEY;
       }
       if (!groups[dateKey]) groups[dateKey] = [];
       groups[dateKey].push(g);
     });
 
-    /* sort: real dates newest first, catalog bucket always last */
-    const sortedKeys = Object.keys(groups).sort((a, b) => {
+    const sortedKeys = Object.keys(groups).sort((a,b) => {
       if (a === CATALOG_KEY) return 1;
       if (b === CATALOG_KEY) return -1;
       return a < b ? 1 : -1;
     });
 
-    /* count Firestore-added games for subtext */
     const fsCount = unique.filter(g => g._source === 'firestore').length;
-    document.getElementById('pageSubtext').textContent =
-      `${unique.length} games total · ${fsCount} added via dashboard`;
+    document.getElementById('pageSubtext').textContent = `${unique.length} games total · ${fsCount} added via dashboard`;
     document.getElementById('statsRow').innerHTML = `
       <div class="stat-chip"><strong>${unique.length}</strong>Total Games</div>
       <div class="stat-chip"><strong>${fsCount}</strong>Dashboard Added</div>
       <div class="stat-chip"><strong>${sortedKeys.filter(k=>k!==CATALOG_KEY).length}</strong>Update Days</div>`;
 
     container.innerHTML = sortedKeys.map((dateKey, idx) => {
-      const games  = groups[dateKey];
+      const games = groups[dateKey];
       const isCatalog = dateKey === CATALOG_KEY;
-      const isToday   = dateKey === TODAY;
-      const label  = isCatalog ? 'Pre-loaded Catalog' : dateLabel(dateKey);
-      const rel    = isCatalog ? null : relLabel(dateKey, TODAY);
+      const isToday = dateKey === TODAY;
+      const label = isCatalog ? 'Pre-loaded Catalog' : dateLabel(dateKey);
+      const rel = isCatalog ? null : relLabel(dateKey, TODAY);
 
       return `<details class="update-group"${idx === 0 ? ' open' : ''} style="animation-delay:${idx*0.045}s">
         <summary>
@@ -471,30 +482,66 @@
     }).join('');
   }
 
-  /* wait for index-app.js to set window.GAMES_CATALOG then start listener */
-  function startListener() {
-    if (!window.GAMES_CATALOG) { setTimeout(startListener, 80); return; }
-
-    const catalog = (window.GAMES_CATALOG || []).map(g => ({
-      ...g, id: String(g.id), _source: 'catalog',
-      status: g.status || 'active', downloads: g.downloads || 0
-    }));
-    const catalogNames = new Set(catalog.map(g => g.name?.toLowerCase()));
-
-    onSnapshot(collection(db, 'games'), snap => {
-      const fsGames = snap.docs.map(d => ({ ...d.data(), id: d.id, _source: 'firestore' }))
-        .filter(g => g.status !== 'hidden');
-      const fsNames = new Set(fsGames.map(g => g.name?.toLowerCase()));
-      const catalogOnly = catalog.filter(g => !fsNames.has(g.name?.toLowerCase()));
-      render([...fsGames, ...catalogOnly]);
-    }, err => {
-      /* Firestore failed — show catalog only */
-      render(catalog);
-      console.warn('Firestore error:', err.message);
+  function waitForCatalog(timeout = 2000) {
+    return new Promise(resolve => {
+      if (window.GAMES_CATALOG && Array.isArray(window.GAMES_CATALOG)) {
+        resolve(window.GAMES_CATALOG);
+        return;
+      }
+      let elapsed = 0;
+      const interval = 100;
+      const check = setInterval(() => {
+        elapsed += interval;
+        if (window.GAMES_CATALOG && Array.isArray(window.GAMES_CATALOG)) {
+          clearInterval(check);
+          resolve(window.GAMES_CATALOG);
+        } else if (elapsed >= timeout) {
+          clearInterval(check);
+          console.warn('GAMES_CATALOG not found after timeout, using empty catalog');
+          resolve([]);
+        }
+      }, interval);
     });
   }
 
-  startListener();
+  async function startSafeListener() {
+    const rawCatalog = await waitForCatalog(2500);
+    const catalog = (rawCatalog || []).map(g => ({
+      ...g,
+      id: String(g.id || ''),
+      _source: 'catalog',
+      status: g.status || 'active',
+      downloads: g.downloads || 0,
+      name: g.name || 'Unknown'
+    }));
+
+    if (!db) {
+      render(catalog);
+      return;
+    }
+
+    let unsub = null;
+    try {
+      unsub = onSnapshot(collection(db, 'games'),
+        (snap) => {
+          const fsGames = snap.docs.map(d => ({ ...d.data(), id: d.id, _source: 'firestore' }))
+            .filter(g => g.status !== 'hidden');
+          const fsNames = new Set(fsGames.map(g => g.name?.toLowerCase()));
+          const catalogOnly = catalog.filter(g => !fsNames.has(g.name?.toLowerCase()));
+          render([...fsGames, ...catalogOnly]);
+        },
+        (err) => {
+          console.warn("Firestore onSnapshot error:", err?.message);
+          render(catalog);
+        }
+      );
+    } catch (err) {
+      console.warn("Firestore listener setup failed", err);
+      render(catalog);
+    }
+  }
+
+  startSafeListener();
 </script>
 </body>
 </html>
